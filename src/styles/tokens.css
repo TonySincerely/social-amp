@@ -1,0 +1,52 @@
+/* ═══════════════════════════════════════════════
+   DESIGN TOKENS — single source of truth
+═══════════════════════════════════════════════ */
+:root {
+  /* Surface */
+  --bg: #f4f1eb;
+  --surface: #ffffff;
+  --surface-2: #f9f7f3;
+  --border: #e5dfd4;
+  --border-2: #d4cdc0;
+
+  /* Text */
+  --ink: #131210;
+  --ink-2: #5a554e;
+  --ink-3: #9a938a;
+  --on-dark: rgba(255, 255, 255, 0.92);
+  --on-dark-2: rgba(255, 255, 255, 0.45);
+
+  /* Brand */
+  --red: #d94535;
+  --red-l: #fdf0ee;
+  --teal: #1d6b63;
+  --teal-l: #eaf4f3;
+  --gold: #b8863a;
+  --gold-l: #fdf5e6;
+  --purple: #6b3fd4;
+  --purple-l: #f0ebfd;
+  --blue: #2257d4;
+  --blue-l: #ebf0fd;
+  --green: #2a7a4b;
+  --green-l: #eaf5ee;
+
+  /* Sidebar */
+  --nav-bg: #1a1714;
+  --nav-border: rgba(255, 255, 255, 0.07);
+
+  /* Sizes */
+  --nav-w: 220px;
+  --topbar-h: 52px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  /* Type */
+  --font-ui: 'Syne', sans-serif;
+  --font-serif: 'Lora', serif;
+  --font-mono: 'DM Mono', monospace;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.06);
+}

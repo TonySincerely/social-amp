@@ -1,0 +1,62 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: all 0.15s;
+  cursor: pointer;
+  white-space: nowrap;
+  border: none;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { background: var(--bg); border-color: var(--border-2); color: var(--ink); }
+
+.btn-primary {
+  background: var(--red);
+  color: white;
+  border: 1px solid transparent;
+}
+.btn-primary:hover { background: #c23d2e; }
+
+.btn-teal {
+  background: var(--teal);
+  color: white;
+  border: 1px solid transparent;
+}
+.btn-teal:hover { background: #175c56; }
+
+.btn-purple {
+  background: var(--purple);
+  color: white;
+  border: 1px solid transparent;
+}
+.btn-purple:hover { background: #5a34b5; }
+
+.btn-secondary {
+  background: var(--bg);
+  color: var(--ink-2);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { background: var(--border); color: var(--ink); }
+
+.btn-danger {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red-l);
+}
+.btn-danger:hover { background: var(--red-l); }

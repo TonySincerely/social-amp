@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import { Layout } from './components'
-import { ProductList, ProductSetup, AccountHub, ContentStudio, Calendar } from './views'
+import { ProductList, ProductSetup, AccountHub, ContentStudio, Calendar, Planner } from './views'
 
 function App() {
   return (
@@ -15,6 +15,7 @@ function App() {
           <Route path="studio/:productId" element={<ContentStudio />} />
           <Route path="accounts" element={<AccountHub />} />
           <Route path="calendar" element={<Calendar />} />
+          <Route path="planner" element={<Planner />} />
         </Route>
       </Routes>
     </AppProvider>

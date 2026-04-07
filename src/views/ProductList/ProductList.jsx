@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllProducts, deleteProduct } from '../../services/storage'
-import { PlusIcon, ChevronRightIcon, TrashIcon, PlatformBadge } from '../../components/Icons'
+import { PlusIcon, ChevronRightIcon, TrashIcon, EditIcon, PlatformBadge } from '../../components/Icons'
 import './ProductList.css'
 
 const STAGE_LABELS = { idea: 'Idea', prototype: 'Prototype', live: 'Live' }
@@ -65,7 +65,7 @@ export function ProductList() {
       ) : (
         <div className="pl-grid">
           {products.map(p => (
-            <div key={p.id} className="product-card" onClick={() => navigate(`/studio/${p.id}`)}>
+            <div key={p.id} className="product-card">
               <div className="product-card-header">
                 <div className="product-card-name">{p.name}</div>
                 <span className={`stage-badge stage-${STAGE_COLORS[p.stage] || 'gold'}`}>
@@ -89,14 +89,23 @@ export function ProductList() {
               </div>
 
               <div className="product-card-footer">
-                <button
-                  className="product-card-delete"
-                  onClick={(e) => handleDelete(e, p.id)}
-                  title="Delete product"
-                >
-                  <TrashIcon size={13} />
-                </button>
-                <button className="product-card-enter" onClick={() => navigate(`/studio/${p.id}`)}>
+                <div className="product-card-left-actions">
+                  <button
+                    className="product-card-delete"
+                    onClick={(e) => handleDelete(e, p.id)}
+                    title="Delete product"
+                  >
+                    <TrashIcon size={13} />
+                  </button>
+                  <button
+                    className="product-card-edit"
+                    onClick={(e) => { e.stopPropagation(); navigate(`/products/${p.id}`) }}
+                    title="Edit settings"
+                  >
+                    <EditIcon size={13} />
+                  </button>
+                </div>
+                <button className="product-card-enter" onClick={(e) => { e.stopPropagation(); navigate(`/studio/${p.id}`) }}>
                   Enter Studio <ChevronRightIcon size={13} />
                 </button>
               </div>

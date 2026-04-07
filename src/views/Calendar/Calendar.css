@@ -15,6 +15,12 @@
   flex-shrink: 0;
 }
 
+.cal-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .cal-title {
   font-size: 22px;
   font-weight: 700;
@@ -135,6 +141,15 @@
 
 .cal-post-chip:hover { background: var(--border); }
 
+/* Draft state — amber outline, italic text */
+.cal-post-chip.draft {
+  background: var(--gold-l);
+  border-color: var(--gold);
+  border-style: dashed;
+}
+
+.cal-post-chip.draft:hover { background: #f5e8c8; }
+
 .cal-post-chip-text {
   font-size: 9px;
   font-weight: 600;
@@ -142,6 +157,19 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.cal-post-chip.draft .cal-post-chip-text {
+  font-style: italic;
+  color: var(--gold);
+}
+
+.cal-draft-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold);
+  flex-shrink: 0;
 }
 
 .cal-post-more {
@@ -198,6 +226,35 @@
 .cal-drawer-date {
   font-size: 11px;
   color: var(--ink-3);
+}
+
+.cal-drawer-time {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+}
+
+.cal-drawer-draft-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gold);
+  background: var(--gold-l);
+  border: 1px solid var(--gold);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.cal-drawer-draft-msg {
+  font-size: 13px;
+  color: var(--ink-3);
+  font-style: italic;
+  background: var(--gold-l);
+  border: 1px solid #f0d99a;
+  border-radius: 6px;
+  padding: 12px 14px;
+  line-height: 1.5;
 }
 
 .cal-drawer-body {

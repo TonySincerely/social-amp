@@ -139,7 +139,14 @@
   border-top: 1px solid var(--border);
 }
 
-.product-card-delete {
+.product-card-left-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.product-card-delete,
+.product-card-edit {
   width: 28px;
   height: 28px;
   border-radius: 6px;
@@ -151,6 +158,7 @@
 }
 
 .product-card-delete:hover { background: var(--red-l); color: var(--red); }
+.product-card-edit:hover { background: var(--bg); color: var(--ink-2); }
 
 .product-card-enter {
   display: inline-flex;

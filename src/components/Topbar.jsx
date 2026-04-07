@@ -7,6 +7,7 @@ const pageTitles = {
   '/products': 'Products',
   '/accounts': 'Accounts',
   '/calendar': 'Calendar',
+  '/planner': 'Calendar Planner',
 }
 
 export function Topbar() {
@@ -16,6 +17,7 @@ export function Topbar() {
 
   const title = pageTitles[location.pathname]
     || (location.pathname.startsWith('/studio') ? 'Content Studio' : 'Social Amp')
+
 
   return (
     <div className="topbar">

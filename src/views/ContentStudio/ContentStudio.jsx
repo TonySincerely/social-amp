@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { getProduct, getAllAccounts, updateProduct, saveCalendarPost } from '../../services/storage'
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { getProduct, getAllAccounts, updateProduct, saveCalendarPost, updateCalendarPost } from '../../services/storage'
 import { generateMultiAccountDrafts, regenerateDraft, getTrendBrief, isGeminiInitialized } from '../../services/gemini'
 import { useApp } from '../../context/AppContext'
 import { PlatformBadge, RefreshIcon, CheckIcon, CloseIcon } from '../../components/Icons'
@@ -19,7 +19,11 @@ const TONE_PRESETS = [
 export function ContentStudio() {
   const { productId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { setShowApiKeyModal } = useApp()
+
+  // Slot handoff from calendar draft (location.state set by Calendar "Write in Studio →")
+  const slotHandoff = location.state?.slotId ? location.state : null
 
   const [product, setProduct] = useState(null)
   const [accounts, setAccounts] = useState([])
@@ -51,6 +55,21 @@ export function ContentStudio() {
       const tones = {}
       linked.forEach(a => { tones[a.id] = a.tonePreset || 'neutral' })
       setAccountTones(tones)
+
+      // If arriving from a calendar draft slot, pre-fill angle + pre-select account
+      if (slotHandoff) {
+        if (slotHandoff.angle) {
+          setAngle(slotHandoff.angle)
+          setAngleInput(slotHandoff.angle)
+        }
+        if (slotHandoff.accountId) {
+          setSelectedAccountIds([slotHandoff.accountId])
+        }
+        if (slotHandoff.date) {
+          setSaveDate(slotHandoff.date)
+        }
+      }
+
       setLoading(false)
     }
     load()
@@ -166,25 +185,40 @@ export function ContentStudio() {
     if (!saveDate) return
     setSaving(true)
     try {
-      const monthKey = saveDate.slice(0, 7) // "YYYY-MM"
+      const monthKey = saveDate.slice(0, 7)
+      const approvedIds = selectedAccountIds.filter(id => drafts[id]?.status === 'approved')
+
       await Promise.all(
-        selectedAccountIds
-          .filter(id => drafts[id]?.status === 'approved')
-          .map((id, i) => {
-            const account = accounts.find(a => a.id === id)
-            return saveCalendarPost({
-              productId,
-              accountId: id,
-              platform: account?.platform,
-              accountHandle: account?.handle,
-              copy: drafts[id].text,
+        approvedIds.map((id, i) => {
+          const account = accounts.find(a => a.id === id)
+          const copy = drafts[id].text
+
+          // If arriving from a draft slot for this account, update it rather than create new
+          if (slotHandoff?.slotId && slotHandoff.accountId === id) {
+            return updateCalendarPost(slotHandoff.slotId, {
+              copy,
               angle: angle.trim(),
               tonePreset: accountTones[id] || 'neutral',
               date: saveDate,
               monthKey,
-              scheduledOffset: i, // minutes stagger hint
+              status: 'ready',
             })
+          }
+
+          return saveCalendarPost({
+            productId,
+            accountId: id,
+            platform: account?.platform,
+            accountHandle: account?.handle,
+            copy,
+            angle: angle.trim(),
+            tonePreset: accountTones[id] || 'neutral',
+            date: saveDate,
+            monthKey,
+            scheduledOffset: i,
+            status: 'ready',
           })
+        })
       )
       setShowSaveModal(false)
       navigate('/calendar')
@@ -212,7 +246,10 @@ export function ContentStudio() {
       {/* Left panel — brief + angle + accounts */}
       <div className="cs-left">
         <div className="cs-product-header">
-          <button className="ps-back" onClick={() => navigate('/products')}>← Products</button>
+          <div className="cs-product-header-top">
+            <button className="ps-back" onClick={() => navigate('/products')}>← Products</button>
+            <button className="cs-edit-link" onClick={() => navigate(`/products/${productId}`)}>Edit settings</button>
+          </div>
           <div className="cs-product-name">{product.name}</div>
           <div className="cs-product-meta">{product.targetPersona}</div>
         </div>

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { getAllCalendarPosts, deleteCalendarPost } from '../../services/storage'
-import { PlatformBadge, ChevronRightIcon, TrashIcon } from '../../components/Icons'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { getAllCalendarPosts, deleteCalendarPost, updateCalendarPost } from '../../services/storage'
+import { PlatformBadge, TrashIcon } from '../../components/Icons'
+import { formatTime12 } from '../../services/planner'
 import './Calendar.css'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -9,6 +10,7 @@ const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
 export function Calendar() {
   const navigate = useNavigate()
+  const location = useLocation()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
@@ -16,7 +18,14 @@ export function Calendar() {
   const [selectedPost, setSelectedPost] = useState(null)
 
   useEffect(() => {
-    getAllCalendarPosts().then(setPosts)
+    getAllCalendarPosts().then(all => {
+      setPosts(all)
+      // If navigated back from planner, jump to the planned month
+      if (location.state?.plannedMonth !== undefined) {
+        setMonth(location.state.plannedMonth)
+        setYear(location.state.plannedYear ?? now.getFullYear())
+      }
+    })
   }, [])
 
   const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`
@@ -39,6 +48,17 @@ export function Calendar() {
     setSelectedPost(null)
   }
 
+  function handleWriteInStudio(post) {
+    navigate(`/studio/${post.productId}`, {
+      state: {
+        slotId: post.id,
+        date: post.date,
+        angle: post.angle || '',
+        accountId: post.accountId,
+      },
+    })
+  }
+
   // Build calendar grid
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -51,17 +71,33 @@ export function Calendar() {
     return monthPosts.filter(p => p.date === dateStr)
   }
 
+  const draftCount = monthPosts.filter(p => p.status === 'draft').length
+  const readyCount = monthPosts.filter(p => p.status !== 'draft').length
+
   return (
     <div className="cal-wrap">
       <div className="cal-header">
         <div>
           <h1 className="cal-title">Calendar</h1>
-          <p className="cal-subtitle">Posts saved from the Content Studio appear here.</p>
+          <p className="cal-subtitle">
+            {monthPosts.length === 0
+              ? 'No posts this month.'
+              : `${readyCount} ready · ${draftCount} draft${draftCount !== 1 ? 's' : ''}`
+            }
+          </p>
         </div>
-        <div className="cal-nav">
-          <button className="cal-nav-btn" onClick={prevMonth}>‹</button>
-          <span className="cal-month-label">{MONTHS[month]} {year}</span>
-          <button className="cal-nav-btn" onClick={nextMonth}>›</button>
+        <div className="cal-header-right">
+          <button
+            className="btn btn-purple"
+            onClick={() => navigate('/planner')}
+          >
+            Plan month
+          </button>
+          <div className="cal-nav">
+            <button className="cal-nav-btn" onClick={prevMonth}>‹</button>
+            <span className="cal-month-label">{MONTHS[month]} {year}</span>
+            <button className="cal-nav-btn" onClick={nextMonth}>›</button>
+          </div>
         </div>
       </div>
 
@@ -82,12 +118,13 @@ export function Calendar() {
                   {dayPosts.slice(0, 3).map(p => (
                     <div
                       key={p.id}
-                      className="cal-post-chip"
+                      className={`cal-post-chip${p.status === 'draft' ? ' draft' : ''}`}
                       onClick={() => setSelectedPost(p)}
-                      title={p.copy?.slice(0, 80)}
+                      title={p.status === 'draft' ? `Draft · @${p.accountHandle}` : p.copy?.slice(0, 80)}
                     >
                       <PlatformBadge platform={p.platform} size={9} />
                       <span className="cal-post-chip-text">@{p.accountHandle}</span>
+                      {p.status === 'draft' && <span className="cal-draft-dot" />}
                     </div>
                   ))}
                   {dayPosts.length > 3 && (
@@ -100,7 +137,7 @@ export function Calendar() {
         </div>
       </div>
 
-      {/* Post detail drawer */}
+      {/* Post/slot detail drawer */}
       {selectedPost && (
         <div className="cal-drawer-overlay" onClick={() => setSelectedPost(null)}>
           <div className="cal-drawer" onClick={e => e.stopPropagation()}>
@@ -109,22 +146,45 @@ export function Calendar() {
                 <PlatformBadge platform={selectedPost.platform} size={13} />
                 <span className="cal-drawer-handle">@{selectedPost.accountHandle}</span>
                 <span className="cal-drawer-date">{selectedPost.date}</span>
+                {selectedPost.time && (
+                  <span className="cal-drawer-time">{formatTime12(selectedPost.time)}</span>
+                )}
+                {selectedPost.status === 'draft' && (
+                  <span className="cal-drawer-draft-badge">draft</span>
+                )}
               </div>
               <button className="ah-icon-btn" onClick={() => setSelectedPost(null)}>×</button>
             </div>
+
             <div className="cal-drawer-body">
               {selectedPost.angle && (
                 <div className="cal-drawer-angle">Angle: {selectedPost.angle}</div>
               )}
-              <div className="cal-drawer-copy">{selectedPost.copy}</div>
+              {selectedPost.status === 'draft' ? (
+                <div className="cal-drawer-draft-msg">
+                  No copy written yet. Open in the Content Studio to write and publish.
+                </div>
+              ) : (
+                <div className="cal-drawer-copy">{selectedPost.copy}</div>
+              )}
             </div>
+
             <div className="cal-drawer-footer">
-              <button
-                className="btn btn-ghost"
-                onClick={() => navigate(`/studio/${selectedPost.productId}`)}
-              >
-                Open in Studio →
-              </button>
+              {selectedPost.status === 'draft' ? (
+                <button
+                  className="btn btn-purple"
+                  onClick={() => handleWriteInStudio(selectedPost)}
+                >
+                  Write in Studio →
+                </button>
+              ) : (
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => navigate(`/studio/${selectedPost.productId}`)}
+                >
+                  Open in Studio →
+                </button>
+              )}
               <button
                 className="btn btn-danger"
                 onClick={() => handleDelete(selectedPost.id)}

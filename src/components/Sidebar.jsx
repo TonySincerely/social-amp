@@ -1,11 +1,13 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LogoIcon, ProductsIcon, AccountsIcon, CalendarIcon } from './Icons'
+import { LogoIcon, ProductsIcon, AccountsIcon, CalendarIcon, PulseIcon, PlaybookIcon } from './Icons'
 import './Sidebar.css'
 
 const navItems = [
   { label: 'Products', path: '/products', Icon: ProductsIcon },
   { label: 'Accounts', path: '/accounts', Icon: AccountsIcon },
+  { label: 'Playbook', path: '/playbook', Icon: PlaybookIcon },
   { label: 'Calendar', path: '/calendar', Icon: CalendarIcon },
+  { label: 'Pulse', path: '/pulse', Icon: PulseIcon },
 ]
 
 export function Sidebar() {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getAllAccounts, saveAccount, deleteAccount } from '../../services/storage'
 import { PlatformBadge, PlusIcon, EditIcon, TrashIcon, CloseIcon } from '../../components/Icons'
+import { LANGUAGES } from '../../data/languages'
 import './AccountHub.css'
 
 const PLATFORMS = ['instagram', 'threads', 'x', 'reddit', 'pinterest', 'facebook']
@@ -10,6 +11,7 @@ const EMPTY_FORM = {
   handle: '',
   platform: 'instagram',
   followerCount: '',
+  languages: [],
   persona: '',
   tonePreset: 'neutral',
 }
@@ -46,6 +48,7 @@ export function AccountHub() {
       handle: account.handle || '',
       platform: account.platform || 'instagram',
       followerCount: account.followerCount ? String(account.followerCount) : '',
+      languages: account.languages || (account.language ? [account.language] : []),
       persona: account.persona || '',
       tonePreset: account.tonePreset || 'neutral',
     })
@@ -72,6 +75,7 @@ export function AccountHub() {
         handle: form.handle.trim().replace(/^@/, ''),
         platform: form.platform,
         followerCount: form.followerCount ? parseInt(form.followerCount, 10) : null,
+        languages: form.languages.length > 0 ? form.languages : null,
         persona: form.persona.trim() || null,
         tonePreset: form.tonePreset,
       }
@@ -136,6 +140,9 @@ export function AccountHub() {
                   ? <span className="voice-tag voice-persona">Persona set</span>
                   : <span className="voice-tag">{a.tonePreset || 'neutral'}</span>
                 }
+                {a.languages?.map(l => (
+                  <span key={l} className="voice-tag voice-lang">{l}</span>
+                ))}
               </div>
               {a.persona && (
                 <div className="account-row-persona" title={a.persona}>
@@ -207,6 +214,48 @@ export function AccountHub() {
                   onChange={e => set('followerCount', e.target.value)}
                   min="0"
                 />
+              </div>
+
+              {/* Languages */}
+              <div className="ps-field">
+                <label className="ps-label">
+                  Languages
+                  <span className="ps-hint">optional — overrides product default</span>
+                </label>
+                {(() => {
+                  const unselected = LANGUAGES.filter(l => !form.languages.includes(l.value))
+                  return (
+                    <>
+                      {unselected.length > 0 && (
+                        <select
+                          value=""
+                          onChange={e => {
+                            if (e.target.value) set('languages', [...form.languages, e.target.value])
+                          }}
+                        >
+                          <option value="">Add language…</option>
+                          {unselected.map(l => (
+                            <option key={l.value} value={l.value}>{l.label}</option>
+                          ))}
+                        </select>
+                      )}
+                      {form.languages.length > 0 && (
+                        <div className="ps-ksp-tags" style={{ marginTop: 6 }}>
+                          {form.languages.map(lang => (
+                            <span key={lang} className="ps-ksp-tag ps-lang-tag">
+                              {lang}
+                              <button
+                                type="button"
+                                className="ps-ksp-remove"
+                                onClick={() => set('languages', form.languages.filter(l => l !== lang))}
+                              >×</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
 
               {/* Default tone */}

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { saveProduct, getProduct, getAllAccounts } from '../../services/storage'
-import { getTrendBrief, isGeminiInitialized } from '../../services/gemini'
-import { useApp } from '../../context/AppContext'
-import { PlatformBadge, PlusIcon } from '../../components/Icons'
+import { PlatformBadge } from '../../components/Icons'
+import { MOOD_PRESETS } from '../../data/visualPresets'
+import { LANGUAGES } from '../../data/languages'
 import './ProductSetup.css'
 
 const PLATFORMS = ['instagram', 'threads', 'x', 'reddit', 'pinterest', 'facebook']
@@ -16,18 +16,25 @@ const STAGES = [
 export function ProductSetup() {
   const navigate = useNavigate()
   const { id } = useParams()
-  const { setShowApiKeyModal } = useApp()
   const isEdit = Boolean(id)
 
   const [form, setForm] = useState({
     name: '',
     problemStatement: '',
     targetPersona: '',
+    languages: ['English'],
+    ksp: [],
+    visualTones: [],
+    preferredColors: [],
     stage: '',
     validationGoal: '',
     platforms: [],
     accountIds: [],
   })
+  const [kspInput, setKspInput] = useState('')
+  const [visualToneInput, setVisualToneInput] = useState('')
+  const [colorInput, setColorInput] = useState('')
+  const [existingBrief, setExistingBrief] = useState(null)
   const [errors, setErrors] = useState({})
   const [warnings, setWarnings] = useState({})
   const [accounts, setAccounts] = useState([])
@@ -37,15 +44,22 @@ export function ProductSetup() {
     getAllAccounts().then(setAccounts)
     if (isEdit) {
       getProduct(id).then(p => {
-        if (p) setForm({
-          name: p.name || '',
-          problemStatement: p.problemStatement || '',
-          targetPersona: p.targetPersona || '',
-          stage: p.stage || '',
-          validationGoal: p.validationGoal || '',
-          platforms: p.platforms || [],
-          accountIds: p.accountIds || [],
-        })
+        if (p) {
+          setExistingBrief(p.trendBrief || null)
+          setForm({
+            name: p.name || '',
+            problemStatement: p.problemStatement || '',
+            targetPersona: p.targetPersona || '',
+            languages: p.languages || (p.language ? [p.language] : ['English']),
+            ksp: p.ksp || [],
+            visualTones: p.visualTones || [],
+            preferredColors: p.preferredColors || [],
+            stage: p.stage || '',
+            validationGoal: p.validationGoal || '',
+            platforms: p.platforms || [],
+            accountIds: p.accountIds || [],
+          })
+        }
       })
     }
   }, [id, isEdit])
@@ -74,6 +88,48 @@ export function ProductSetup() {
     }))
   }
 
+  function addKsp() {
+    const val = kspInput.trim()
+    if (!val || form.ksp.length >= 6) return
+    setForm(prev => ({ ...prev, ksp: [...prev.ksp, val] }))
+    setKspInput('')
+  }
+
+  function removeKsp(i) {
+    setForm(prev => ({ ...prev, ksp: prev.ksp.filter((_, idx) => idx !== i) }))
+  }
+
+  function toggleVisualTone(tone) {
+    setForm(prev => ({
+      ...prev,
+      visualTones: prev.visualTones.includes(tone)
+        ? prev.visualTones.filter(t => t !== tone)
+        : [...prev.visualTones, tone],
+    }))
+  }
+
+  function addCustomTone() {
+    const v = visualToneInput.trim()
+    if (!v || form.visualTones.includes(v)) return
+    setForm(prev => ({ ...prev, visualTones: [...prev.visualTones, v] }))
+    setVisualToneInput('')
+  }
+
+  function removeVisualTone(i) {
+    setForm(prev => ({ ...prev, visualTones: prev.visualTones.filter((_, idx) => idx !== i) }))
+  }
+
+  function addColor() {
+    const v = colorInput.trim()
+    if (!v || form.preferredColors.includes(v)) return
+    setForm(prev => ({ ...prev, preferredColors: [...prev.preferredColors, v] }))
+    setColorInput('')
+  }
+
+  function removeColor(i) {
+    setForm(prev => ({ ...prev, preferredColors: prev.preferredColors.filter((_, idx) => idx !== i) }))
+  }
+
   function validate() {
     const errs = {}
     const warns = {}
@@ -92,11 +148,6 @@ export function ProductSetup() {
     setWarnings(warns)
     if (Object.keys(errs).length > 0) return
 
-    if (!isGeminiInitialized()) {
-      setShowApiKeyModal(true)
-      return
-    }
-
     setSaving(true)
     try {
       const productData = {
@@ -104,24 +155,18 @@ export function ProductSetup() {
         name: form.name.trim(),
         problemStatement: form.problemStatement.trim(),
         targetPersona: form.targetPersona.trim(),
+        languages: form.languages.length > 0 ? form.languages : ['English'],
+        ksp: form.ksp,
+        visualTones: form.visualTones,
+        preferredColors: form.preferredColors,
         stage: form.stage || 'idea',
         validationGoal: form.validationGoal.trim(),
         platforms: form.platforms,
         accountIds: form.accountIds,
-        trendBrief: null,
+        trendBrief: isEdit ? existingBrief : null,
       }
 
       const saved = await saveProduct(productData)
-
-      // Fire trend brief async — don't block navigation
-      getTrendBrief({
-        name: saved.name,
-        problemStatement: saved.problemStatement,
-        targetPersona: saved.targetPersona,
-      }).then(brief => {
-        saveProduct({ ...saved, trendBrief: brief })
-      }).catch(() => {})
-
       navigate(`/studio/${saved.id}`)
     } catch (err) {
       setErrors({ _global: err.message })
@@ -131,6 +176,7 @@ export function ProductSetup() {
   }
 
   const accountsForPlatforms = accounts.filter(a => form.platforms.includes(a.platform))
+  const customTones = form.visualTones.filter(t => !MOOD_PRESETS.includes(t))
 
   return (
     <div className="ps-wrap">
@@ -184,6 +230,166 @@ export function ProductSetup() {
           {errors.targetPersona && <div className="ps-error">{errors.targetPersona}</div>}
         </div>
 
+        {/* Languages */}
+        <div className="ps-field">
+          <label className="ps-label">
+            Content languages
+            <span className="ps-hint">Default for all accounts — overridable per account</span>
+          </label>
+          {(() => {
+            const unselected = LANGUAGES.filter(l => !form.languages.includes(l.value))
+            return (
+              <>
+                {unselected.length > 0 && (
+                  <select
+                    value=""
+                    onChange={e => {
+                      if (e.target.value) set('languages', [...form.languages, e.target.value])
+                    }}
+                  >
+                    <option value="">Add language…</option>
+                    {unselected.map(l => (
+                      <option key={l.value} value={l.value}>{l.label}</option>
+                    ))}
+                  </select>
+                )}
+                {form.languages.length > 0 && (
+                  <div className="ps-ksp-tags" style={{ marginTop: 6 }}>
+                    {form.languages.map(lang => (
+                      <span key={lang} className="ps-ksp-tag ps-lang-tag">
+                        {lang}
+                        <button
+                          type="button"
+                          className="ps-ksp-remove"
+                          onClick={() => set('languages', form.languages.filter(l => l !== lang))}
+                        >×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </>
+            )
+          })()}
+        </div>
+
+        {/* KSP */}
+        <div className="ps-field">
+          <label className="ps-label">
+            Key selling points
+            <span className="ps-hint">Up to 6 — press Enter to add</span>
+          </label>
+          <div className="ps-ksp-input-row">
+            <input
+              type="text"
+              placeholder="e.g. No setup required — works in 30 seconds"
+              value={kspInput}
+              onChange={e => setKspInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKsp() } }}
+              disabled={form.ksp.length >= 6}
+            />
+            <button
+              type="button"
+              className="ps-ksp-add"
+              onClick={addKsp}
+              disabled={!kspInput.trim() || form.ksp.length >= 6}
+            >
+              +
+            </button>
+          </div>
+          {form.ksp.length > 0 && (
+            <div className="ps-ksp-tags">
+              {form.ksp.map((k, i) => (
+                <span key={i} className="ps-ksp-tag">
+                  {k}
+                  <button type="button" className="ps-ksp-remove" onClick={() => removeKsp(i)}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Visual tones */}
+        <div className="ps-field">
+          <label className="ps-label">
+            Visual tones
+            <span className="ps-hint">Aesthetic descriptors for image generation</span>
+          </label>
+          <div className="ps-visual-presets">
+            {MOOD_PRESETS.map(m => (
+              <button
+                key={m}
+                type="button"
+                className={`ps-visual-preset${form.visualTones.includes(m) ? ' selected' : ''}`}
+                onClick={() => toggleVisualTone(m)}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+          <div className="ps-ksp-input-row" style={{ marginTop: 6 }}>
+            <input
+              type="text"
+              placeholder="Or type a custom descriptor…"
+              value={visualToneInput}
+              onChange={e => setVisualToneInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomTone() } }}
+            />
+            <button
+              type="button"
+              className="ps-ksp-add"
+              onClick={addCustomTone}
+              disabled={!visualToneInput.trim()}
+            >
+              +
+            </button>
+          </div>
+          {customTones.length > 0 && (
+            <div className="ps-ksp-tags">
+              {customTones.map(t => (
+                <span key={t} className="ps-ksp-tag">
+                  {t}
+                  <button type="button" className="ps-ksp-remove" onClick={() => removeVisualTone(form.visualTones.indexOf(t))}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Preferred colors */}
+        <div className="ps-field">
+          <label className="ps-label">
+            Preferred colors
+            <span className="ps-hint">Color language for image prompts — press Enter to add</span>
+          </label>
+          <div className="ps-ksp-input-row">
+            <input
+              type="text"
+              placeholder="e.g. warm ivory, deep navy, forest green"
+              value={colorInput}
+              onChange={e => setColorInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addColor() } }}
+            />
+            <button
+              type="button"
+              className="ps-ksp-add"
+              onClick={addColor}
+              disabled={!colorInput.trim()}
+            >
+              +
+            </button>
+          </div>
+          {form.preferredColors.length > 0 && (
+            <div className="ps-ksp-tags">
+              {form.preferredColors.map((c, i) => (
+                <span key={i} className="ps-ksp-tag ps-color-tag">
+                  {c}
+                  <button type="button" className="ps-ksp-remove" onClick={() => removeColor(i)}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Platforms */}
         <div className={`ps-field${errors.platforms ? ' ps-field-error' : ''}`}>
           <label className="ps-label">
@@ -206,7 +412,7 @@ export function ProductSetup() {
           {errors.platforms && <div className="ps-error">{errors.platforms}</div>}
         </div>
 
-        {/* Accounts (shown if platforms selected) */}
+        {/* Accounts */}
         {form.platforms.length > 0 && (
           <div className="ps-field">
             <label className="ps-label">
@@ -216,11 +422,7 @@ export function ProductSetup() {
             {accountsForPlatforms.length === 0 ? (
               <div className="ps-no-accounts">
                 No accounts yet for selected platforms.{' '}
-                <button
-                  className="ps-link"
-                  onClick={() => navigate('/accounts')}
-                  type="button"
-                >
+                <button className="ps-link" onClick={() => navigate('/accounts')} type="button">
                   Add accounts →
                 </button>
               </div>
@@ -248,7 +450,7 @@ export function ProductSetup() {
           </div>
         )}
 
-        {/* Stage (soft required) */}
+        {/* Stage + Validation goal */}
         <div className="ps-row">
           <div className={`ps-field${warnings.stage ? ' ps-field-warn' : ''}`} style={{ flex: 1 }}>
             <label className="ps-label">Product stage</label>
@@ -267,7 +469,6 @@ export function ProductSetup() {
             {warnings.stage && <div className="ps-warn">{warnings.stage}</div>}
           </div>
 
-          {/* Validation goal (soft required) */}
           <div className={`ps-field${warnings.validationGoal ? ' ps-field-warn' : ''}`} style={{ flex: 1 }}>
             <label className="ps-label">Validation goal</label>
             <input
@@ -283,20 +484,14 @@ export function ProductSetup() {
         {errors._global && <div className="ps-global-error">{errors._global}</div>}
 
         <div className="ps-actions">
-          <button
-            className="btn btn-ghost"
-            onClick={() => navigate('/products')}
-            type="button"
-          >
+          <button className="btn btn-ghost" onClick={() => navigate('/products')} type="button">
             Cancel
           </button>
-          <button
-            className="btn btn-purple"
-            onClick={handleSave}
-            disabled={saving}
-            type="button"
-          >
-            {saving ? <><div className="spinner" style={{ width: 12, height: 12, borderTopColor: 'white' }} /> Saving…</> : 'Save & enter studio →'}
+          <button className="btn btn-purple" onClick={handleSave} disabled={saving} type="button">
+            {saving
+              ? <><div className="spinner" style={{ width: 12, height: 12, borderTopColor: 'white' }} /> Saving…</>
+              : 'Save & enter studio →'
+            }
           </button>
         </div>
       </div>

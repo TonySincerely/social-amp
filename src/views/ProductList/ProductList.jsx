@@ -75,6 +75,17 @@ export function ProductList() {
 
               <div className="product-card-problem">{p.problemStatement}</div>
 
+              {p.ksp?.length > 0 && (
+                <div className="product-card-ksp">
+                  {p.ksp.slice(0, 3).map((k, i) => (
+                    <span key={i} className="ksp-pill">{k}</span>
+                  ))}
+                  {p.ksp.length > 3 && (
+                    <span className="ksp-pill ksp-pill--more">+{p.ksp.length - 3} more</span>
+                  )}
+                </div>
+              )}
+
               <div className="product-card-meta">
                 <div className="product-card-platforms">
                   {(p.platforms || []).map(pl => (

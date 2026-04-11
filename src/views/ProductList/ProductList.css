@@ -108,6 +108,32 @@
   overflow: hidden;
 }
 
+.product-card-ksp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ksp-pill {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ink-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.ksp-pill--more {
+  color: var(--ink-3);
+  font-style: italic;
+}
+
 .product-card-meta {
   display: flex;
   align-items: center;

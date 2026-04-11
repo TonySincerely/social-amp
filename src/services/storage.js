@@ -1,7 +1,7 @@
 import { openDB } from 'idb'
 
 const DB_NAME = 'socialamp'
-const DB_VERSION = 1
+const DB_VERSION = 3
 
 let dbPromise = null
 
@@ -26,6 +26,15 @@ async function getDB() {
           s.createIndex('monthKey', 'monthKey')
           s.createIndex('productId', 'productId')
           s.createIndex('date', 'date')
+        }
+        // Trend snapshots (v2)
+        if (!db.objectStoreNames.contains('trendSnapshots')) {
+          const s = db.createObjectStore('trendSnapshots', { keyPath: 'id' })
+          s.createIndex('fetchedAt', 'fetchedAt')
+        }
+        // Platform configs (v3)
+        if (!db.objectStoreNames.contains('platformConfigs')) {
+          db.createObjectStore('platformConfigs', { keyPath: 'platform' })
         }
       },
     })
@@ -147,6 +156,32 @@ export async function deleteCalendarPost(id) {
   await db.delete('calendarPosts', id)
 }
 
+// ─── Trend Snapshots ──────────────────────────────────────────────────────────
+
+export async function saveTrendSnapshot(snapshot) {
+  const db = await getDB()
+  const data = {
+    ...snapshot,
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+  }
+  await db.put('trendSnapshots', data)
+  // Prune: keep only 5 most recent
+  const all = await db.getAll('trendSnapshots')
+  if (all.length > 5) {
+    const sorted = all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    for (const old of sorted.slice(5)) {
+      await db.delete('trendSnapshots', old.id)
+    }
+  }
+  return data
+}
+
+export async function getAllTrendSnapshots() {
+  const db = await getDB()
+  return db.getAll('trendSnapshots')
+}
+
 // ─── LocalStorage helpers ─────────────────────────────────────────────────────
 
 export function setLocalData(key, value) {
@@ -159,4 +194,48 @@ export function getLocalData(key, defaultValue = null) {
     try { return JSON.parse(stored) } catch { return defaultValue }
   }
   return defaultValue
+}
+
+// ─── Platform Configs ─────────────────────────────────────────────────────────
+
+export const PLATFORM_DEFAULTS = {
+  instagram: { charLimit: 2200, wordLimit: null, hashtagLimit: 30, linkInPost: false, videoMaxSec: 60 },
+  x:         { charLimit: 280,  wordLimit: null, hashtagLimit: 2,  linkInPost: true,  videoMaxSec: 140 },
+  threads:   { charLimit: 500,  wordLimit: null, hashtagLimit: null, linkInPost: true, videoMaxSec: 300 },
+  reddit:    { charLimit: null, wordLimit: null, hashtagLimit: null, linkInPost: true,  videoMaxSec: null },
+  facebook:  { charLimit: null, wordLimit: null, hashtagLimit: null, linkInPost: true,  videoMaxSec: null },
+  pinterest: { charLimit: 500,  wordLimit: null, hashtagLimit: 20, linkInPost: true,  videoMaxSec: null },
+}
+
+export async function getAllPlatformConfigs() {
+  const db = await getDB()
+  return db.getAll('platformConfigs')
+}
+
+export async function getPlatformConfig(platform) {
+  const db = await getDB()
+  return db.get('platformConfigs', platform)
+}
+
+export async function savePlatformConfig(config) {
+  const db = await getDB()
+  const data = { ...config, updatedAt: new Date().toISOString() }
+  await db.put('platformConfigs', data)
+  return data
+}
+
+export async function seedPlatformDefaults() {
+  const db = await getDB()
+  for (const [platform, limits] of Object.entries(PLATFORM_DEFAULTS)) {
+    const existing = await db.get('platformConfigs', platform)
+    if (!existing) {
+      await db.put('platformConfigs', {
+        platform,
+        limits: { ...limits },
+        strategies: [],
+        selectedStrategyId: null,
+        updatedAt: new Date().toISOString(),
+      })
+    }
+  }
 }

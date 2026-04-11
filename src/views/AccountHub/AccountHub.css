@@ -107,6 +107,12 @@
   border-color: var(--teal-l);
 }
 
+.voice-tag.voice-lang {
+  background: var(--purple-l);
+  color: var(--purple);
+  border-color: var(--purple-l);
+}
+
 .account-row-persona {
   font-size: 11px;
   color: var(--ink-3);

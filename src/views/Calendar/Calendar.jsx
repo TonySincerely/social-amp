@@ -59,6 +59,22 @@ export function Calendar() {
     })
   }
 
+  function handleEditInStudio(post) {
+    navigate(`/studio/${post.productId}`, {
+      state: {
+        prefillPost: {
+          postId: post.id,
+          copy: post.copy,
+          angle: post.angle || '',
+          identity: post.identity || 'random_guy',
+          postTone: post.postTone || 'promoting',
+          accountId: post.accountId,
+          date: post.date,
+        },
+      },
+    })
+  }
+
   // Build calendar grid
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -180,9 +196,9 @@ export function Calendar() {
               ) : (
                 <button
                   className="btn btn-ghost"
-                  onClick={() => navigate(`/studio/${selectedPost.productId}`)}
+                  onClick={() => handleEditInStudio(selectedPost)}
                 >
-                  Open in Studio →
+                  Edit in Studio →
                 </button>
               )}
               <button

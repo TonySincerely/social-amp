@@ -119,15 +119,36 @@ export function EditIcon({ size = 16 }) {
   )
 }
 
+export function PlaybookIcon({ size = 16 }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width={size} height={size}>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+      <line x1="9" y1="7" x2="15" y2="7" />
+      <line x1="9" y1="11" x2="15" y2="11" />
+    </svg>
+  )
+}
+
+export function PulseIcon({ size = 16 }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width={size} height={size}>
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  )
+}
+
 // Platform icons as colored badges
 export function PlatformBadge({ platform, size = 14 }) {
   const map = {
     instagram: { color: '#E1306C', label: 'IG' },
     threads: { color: '#000000', label: 'TH' },
     x: { color: '#1DA1F2', label: 'X' },
+    twitter: { color: '#1DA1F2', label: 'X' },
     reddit: { color: '#FF4500', label: 'RE' },
     pinterest: { color: '#E60023', label: 'PI' },
     facebook: { color: '#1877F2', label: 'FB' },
+    web: { color: '#5a554e', label: 'WEB' },
   }
   const { color, label } = map[platform] || { color: '#9a938a', label: '?' }
   return (

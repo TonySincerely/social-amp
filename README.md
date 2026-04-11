@@ -13,6 +13,7 @@ An internal tool for validating product ideas through coordinated social media a
 | **Calendar Planner** | `/planner` | Generate a full month of skeleton post slots based on best-practice frequency, optimal times, and platform-specific day distribution. |
 | **Calendar** | `/calendar` | Monthly grid of all posts. Draft slots (from planner) and ready posts (from studio) shown with distinct visual states. |
 | **Pulse** | `/pulse` | Daily trend and planning view. Upcoming cultural moments (next 6 weeks, region-aware) alongside live trend snapshots across Twitter, Reddit, Instagram, and the web. Star trends, send directly to Content Studio as an angle. |
+| **Quick Create** | Sidebar `+ New Post` | Right-side overlay drawer. 4-step wizard to go from zero to a scheduled post without leaving the current view. |
 
 ## How it works
 
@@ -89,6 +90,17 @@ Language is omitted from the prompt for English drafts (it's the default). Image
 
 The language resolution chain: `account.languages[] → product.languages[] → ['English']`.
 
+### Quick Create
+
+The **+ New Post** button in the sidebar opens a right-side overlay drawer accessible from anywhere in the app. A 4-step wizard replaces the full Content Studio flow for fast single-post creation:
+
+1. **Context** — select a product (auto-selected if only one exists), pick identity and tone from dropdowns.
+2. **Setup** — enter or select an angle. If a trend brief exists, angles are shown as clickable chips immediately; a refresh icon lets you update them. A collapsible Visual section carries over mood and color descriptors. Select accounts to generate for. Angle and accounts are optional — if either is missing, a warning banner replaces the footer and asks you to confirm before continuing. Missing context reduces draft quality but doesn't block.
+3. **Draft** — generate one draft per account × language slot in parallel, using the same Playbook limits and active strategy directives as Content Studio. Per-tab approve/needs-work controls. At least one approved draft is required to advance; if some remain unapproved, a confirmation dialog warns that they will be discarded.
+4. **Schedule** — pick a publish date and time (down to the hour). The dominant platform of the selected accounts drives an inline time recommendation (e.g. *11:00 AM recommended · instagram*) with a one-click "Use" button. The step 4 summary lists only approved posts and shows an "image" badge on any slot with a generated image.
+
+On save, each approved draft is written to the calendar as a `ready` post. If an image was generated for that slot, `imageBase64`, `imageMimeType`, and `imagePrompt` are stored on the record. The drawer closes and navigates to the calendar for the saved month.
+
 ### Calendar Planner
 
 1. **Setup** — pick a month, confirm timezone (auto-detected), select one or more products.
@@ -125,7 +137,7 @@ Constraints at positions 6–8 are placed last in the prompt to maximise adheren
 ## Tech stack
 
 - **React 19 + Vite 7** — React Router v7
-- **State** — React Context + component `useState`
+- **State** — React Context (`AppContext` — API key modal + quick create drawer) + component `useState`
 - **Storage** — IndexedDB via `idb` (v3: products, accounts, calendarPosts, trendSnapshots, platformConfigs) · LocalStorage (API key, timezone, pulse preferences)
 - **AI** — `@google/generative-ai` SDK — Gemini Flash / Pro with Google Search grounding for trend briefs and pulse snapshots; standard generation for drafts and strategy distillation; `gemini-2.5-flash-image` (Nano Banana) via direct `fetch` for post image generation
 - **Scheduling** — `src/services/planner.js` — pure JS, no AI calls
@@ -149,7 +161,7 @@ Get a free Gemini API key at [aistudio.google.com](https://aistudio.google.com/a
 
 ```
 src/
-├── components/         # Layout, Sidebar, Topbar, Icons, ApiKeyModal
+├── components/         # Layout, Sidebar, Topbar, Icons, ApiKeyModal, QuickCreateDrawer
 ├── context/            # AppContext — API key modal state
 ├── data/
 │   ├── upcomingEvents.js   # Static region-aware cultural calendar
@@ -189,9 +201,13 @@ All data is stored locally in IndexedDB under the `socialamp` database (v3).
 - `tonePreset` — default tone when no persona is set (educator, puncher, helper, jester, closer, storyteller, neutral)
 - `persona` — free text; when set, overrides all identity and tone instructions at generation time
 
-**Calendar posts** — `{ id, productId, accountId, platform, accountHandle, copy, angle, identity, postTone, date, time, monthKey, scheduledOffset, status, createdAt, updatedAt }`
+**Calendar posts** — `{ id, productId, accountId, platform, accountHandle, copy, angle, identity, postTone, date, time, monthKey, scheduledOffset, status, imageBase64?, imageMimeType?, imagePrompt?, createdAt, updatedAt }`
 
 `status` — `'draft'` for planner skeleton slots · `'ready'` for posts with written copy.
+
+`time` — optional `HH:MM` string set when the post is saved from Quick Create or Content Studio with a time selected.
+
+`imageBase64` / `imageMimeType` / `imagePrompt` — optional; present when an image was generated for the post in Content Studio or Quick Create.
 
 **Trend snapshots** — `{ id, location, region, fetchedAt, trends[], upcomingBuzz[], createdAt }`
 

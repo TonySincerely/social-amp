@@ -44,6 +44,31 @@
   color: var(--purple);
 }
 
+.sidebar-new-post-wrap {
+  padding: 10px 12px 4px;
+  flex-shrink: 0;
+}
+
+.sidebar-new-post {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 7px;
+  background: var(--purple);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sidebar-new-post:hover { background: #5a34b5; }
+
 .sidebar-nav {
   flex: 1;
   padding: 14px 10px;

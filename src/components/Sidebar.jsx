@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LogoIcon, ProductsIcon, AccountsIcon, CalendarIcon, PulseIcon, PlaybookIcon } from './Icons'
+import { LogoIcon, ProductsIcon, AccountsIcon, CalendarIcon, PulseIcon, PlaybookIcon, PlusIcon } from './Icons'
+import { useApp } from '../context/AppContext'
 import './Sidebar.css'
 
 const navItems = [
@@ -13,6 +14,7 @@ const navItems = [
 export function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { setShowQuickCreate } = useApp()
 
   const isActive = (path) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
@@ -26,6 +28,13 @@ export function Sidebar() {
           </div>
           <span className="logo-text">Social<span>Amp</span></span>
         </div>
+      </div>
+
+      <div className="sidebar-new-post-wrap">
+        <button className="sidebar-new-post" onClick={() => setShowQuickCreate(true)}>
+          <PlusIcon size={13} />
+          New Post
+        </button>
       </div>
 
       <nav className="sidebar-nav">

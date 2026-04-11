@@ -75,12 +75,28 @@ async function findAvailableModel() {
 // ─── JSON parsing helper ──────────────────────────────────────────────────────
 
 function parseJson(text) {
-  let jsonText = text
-  const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (codeBlock) jsonText = codeBlock[1]
+  let jsonText = text.trim()
+
+  // Strip markdown code blocks
+  const codeBlock = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (codeBlock) jsonText = codeBlock[1].trim()
+
+  // Extract the outermost JSON object
   const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error('No JSON found in response')
-  return JSON.parse(jsonMatch[0])
+  jsonText = jsonMatch[0]
+
+  // Try strict parse first
+  try {
+    return JSON.parse(jsonText)
+  } catch {
+    // Sanitize common Gemini quirks and retry
+    const sanitized = jsonText
+      .replace(/,(\s*[}\]])/g, '$1')                  // trailing commas
+      .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3')   // unquoted keys
+      .replace(/:\s*'([^'\\]*(\\.[^'\\]*)*)'\s*([,}\]])/g, ': "$1"$3') // single-quoted values
+    return JSON.parse(sanitized)
+  }
 }
 
 // ─── Trend Brief ──────────────────────────────────────────────────────────────

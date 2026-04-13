@@ -7,10 +7,9 @@ import {
   getLocalData,
   setLocalData,
 } from '../../services/storage'
-import { getPulseSnapshot, isGeminiInitialized } from '../../services/gemini'
+import { getPulseSnapshot } from '../../services/gemini'
 import { getUpcomingEvents } from '../../data/upcomingEvents'
 import { PlatformBadge, RefreshIcon } from '../../components/Icons'
-import { useApp } from '../../context/AppContext'
 import './Pulse.css'
 
 const LOCATIONS = [
@@ -34,8 +33,6 @@ function timeAgo(isoStr) {
 
 export function Pulse() {
   const navigate = useNavigate()
-  const { setShowApiKeyModal } = useApp()
-
   const [locationLabel, setLocationLabel] = useState(
     () => getLocalData('pulse_location', 'United States')
   )
@@ -63,7 +60,6 @@ export function Pulse() {
   }
 
   async function handleRefresh() {
-    if (!isGeminiInitialized()) { setShowApiKeyModal(true); return }
     setLoading(true)
     setError(null)
     try {

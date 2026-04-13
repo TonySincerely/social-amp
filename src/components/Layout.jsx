@@ -1,14 +1,10 @@
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
-import { ApiKeyModal } from './ApiKeyModal'
 import { QuickCreateDrawer } from './QuickCreateDrawer'
-import { useApp } from '../context/AppContext'
 import './Layout.css'
 
 export function Layout() {
-  const { showApiKeyModal } = useApp()
-
   return (
     <div className="app">
       <Sidebar />
@@ -18,7 +14,6 @@ export function Layout() {
           <Outlet />
         </div>
       </div>
-      {showApiKeyModal && <ApiKeyModal />}
       <QuickCreateDrawer />
     </div>
   )

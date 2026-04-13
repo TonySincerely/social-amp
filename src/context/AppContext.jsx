@@ -1,29 +1,13 @@
-import { createContext, useContext, useState, useEffect } from 'react'
-import { initGemini, getStoredApiKey, isGeminiInitialized } from '../services/gemini'
+import { createContext, useContext, useState } from 'react'
 
 const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
-  const [apiKeySet, setApiKeySet] = useState(false)
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false)
   const [showQuickCreate, setShowQuickCreate] = useState(false)
   const [quickCreateDate, setQuickCreateDate] = useState(null)
 
-  useEffect(() => {
-    const key = getStoredApiKey()
-    if (key) {
-      initGemini(key)
-      setApiKeySet(true)
-    }
-  }, [])
-
-  function onApiKeySaved() {
-    setApiKeySet(isGeminiInitialized())
-    setShowApiKeyModal(false)
-  }
-
   return (
-    <AppContext.Provider value={{ apiKeySet, showApiKeyModal, setShowApiKeyModal, onApiKeySaved, showQuickCreate, setShowQuickCreate, quickCreateDate, setQuickCreateDate }}>
+    <AppContext.Provider value={{ showQuickCreate, setShowQuickCreate, quickCreateDate, setQuickCreateDate }}>
       {children}
     </AppContext.Provider>
   )

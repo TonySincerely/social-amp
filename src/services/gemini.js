@@ -1,45 +1,20 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-let genAI = null
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
+
+let genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null
 let cachedModelName = null
-
-const STORAGE_KEY = 'socialamp_apikey'
-
-export function getStoredApiKey() {
-  return localStorage.getItem(STORAGE_KEY) || null
-}
-
-export function setApiKey(key) {
-  localStorage.setItem(STORAGE_KEY, key)
-  initGemini(key)
-}
-
-export function clearApiKey() {
-  localStorage.removeItem(STORAGE_KEY)
-  genAI = null
-  cachedModelName = null
-}
-
-export function initGemini(apiKey) {
-  genAI = new GoogleGenerativeAI(apiKey)
-  cachedModelName = null
-}
-
-export function isGeminiInitialized() {
-  return genAI !== null
-}
 
 // ─── Model Discovery ──────────────────────────────────────────────────────────
 
 async function findAvailableModel() {
   if (cachedModelName) return cachedModelName
 
-  const apiKey = getStoredApiKey()
-  if (!apiKey) throw new Error('No API key available')
+  if (!API_KEY) throw new Error('No API key available')
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`
     )
     if (!response.ok) throw new Error(`Failed to list models: ${response.status}`)
 
@@ -382,8 +357,7 @@ function getImageAspectRatio(platform) {
  */
 export async function generatePostImage({ postCopy, visualTones, preferredColors, platform, productName }) {
   if (!genAI) throw new Error('Gemini API not initialized.')
-  const apiKey = getStoredApiKey()
-  if (!apiKey) throw new Error('No API key available')
+  if (!API_KEY) throw new Error('No API key available')
 
   const modelName = await findAvailableModel()
   const model = genAI.getGenerativeModel({ model: modelName })
@@ -414,7 +388,7 @@ Respond with ONLY the image prompt text — no labels, no explanation.`
 
   // Generate image via gemini-2.5-flash-image (Nano Banana) using generateContent
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

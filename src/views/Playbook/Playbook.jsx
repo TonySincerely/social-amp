@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getAllPlatformConfigs, getPlatformConfig, savePlatformConfig, seedPlatformDefaults, PLATFORM_DEFAULTS } from '../../services/storage'
-import { distillStrategy, isGeminiInitialized } from '../../services/gemini'
+import { distillStrategy } from '../../services/gemini'
 import { PlatformBadge, CloseIcon, PlusIcon, EditIcon } from '../../components/Icons'
 import './Playbook.css'
 
@@ -123,7 +123,7 @@ export function Playbook() {
   }
 
   async function handleDistillInModal() {
-    if (!modalContent.trim() || !isGeminiInitialized()) return
+    if (!modalContent.trim()) return
     setModalDistilling(true)
     try {
       const directives = await distillStrategy(modalContent)
@@ -165,7 +165,7 @@ export function Playbook() {
 
     // Background distillation if no directives yet and Gemini is available
     const needsDistill = modalDirectives.length === 0 || (modalStrategy && modalContentDirty)
-    if (needsDistill && isGeminiInitialized()) {
+    if (needsDistill) {
       const target = saved.strategies.find(s => s.name === name && s.content === content)
       if (target) distillInBackground(target.id, activePlatform)
     }
@@ -462,8 +462,7 @@ export function Playbook() {
                     <button
                       className={`pb-distill-btn${modalContentDirty && modalDirectives.length > 0 ? ' dirty' : ''}`}
                       onClick={handleDistillInModal}
-                      disabled={!modalContent.trim() || !isGeminiInitialized()}
-                      title={!isGeminiInitialized() ? 'Set API key to distill' : undefined}
+                      disabled={!modalContent.trim()}
                     >
                       {modalDirectives.length > 0
                         ? (modalContentDirty ? '↻ Re-distill' : '↻ Regenerate')
@@ -492,9 +491,7 @@ export function Playbook() {
                   </>
                 ) : (
                   <div className="pb-directives-empty">
-                    {!isGeminiInitialized()
-                      ? 'Set your API key to auto-extract directives on save.'
-                      : 'Directives will be extracted automatically when you save, or click Distill to preview now.'}
+                    Directives will be extracted automatically when you save, or click Distill to preview now.
                   </div>
                 )}
               </div>

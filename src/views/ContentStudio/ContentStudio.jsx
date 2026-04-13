@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { getProduct, getAllAccounts, updateProduct, saveCalendarPost, updateCalendarPost, getAllPlatformConfigs, seedPlatformDefaults } from '../../services/storage'
-import { generateMultiAccountDrafts, regenerateDraft, getTrendBrief, generatePostImage, isGeminiInitialized } from '../../services/gemini'
-import { useApp } from '../../context/AppContext'
+import { generateMultiAccountDrafts, regenerateDraft, getTrendBrief, generatePostImage } from '../../services/gemini'
 import { PlatformBadge, RefreshIcon, CheckIcon, CloseIcon } from '../../components/Icons'
 import { MOOD_PRESETS } from '../../data/visualPresets'
 import { langShort } from '../../data/languages'
@@ -45,8 +44,6 @@ export function ContentStudio() {
   const { productId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const { setShowApiKeyModal } = useApp()
-
   const slotHandoff = location.state?.slotId ? location.state : null
   const prefillPost = location.state?.prefillPost ? location.state.prefillPost : null
   const pulseHandoff = !location.state?.slotId && !location.state?.prefillPost && location.state?.angle
@@ -136,7 +133,6 @@ export function ContentStudio() {
   const briefStale = brief && (Date.now() - new Date(brief.fetchedAt)) > 24 * 3_600_000
 
   async function refreshBrief() {
-    if (!isGeminiInitialized()) { setShowApiKeyModal(true); return }
     setBriefRefreshing(true)
     try {
       const newBrief = await getTrendBrief({
@@ -182,7 +178,6 @@ export function ContentStudio() {
 
   async function handleGenerate() {
     if (!angle.trim() || selectedAccountIds.length === 0) return
-    if (!isGeminiInitialized()) { setShowApiKeyModal(true); return }
 
     const slots = buildDraftSlots(selectedAccountIds, accounts, product)
     if (slots.length === 0) return
@@ -238,7 +233,6 @@ export function ContentStudio() {
     const { accountId, language } = parseSlotKey(slotKey)
     const account = accounts.find(a => a.id === accountId)
     if (!account) return
-    if (!isGeminiInitialized()) { setShowApiKeyModal(true); return }
 
     if (drafts[slotKey]?.text && !confirm('Your edits will be lost. Regenerate?')) return
 
@@ -271,7 +265,6 @@ export function ContentStudio() {
     const account = accounts.find(a => a.id === accountId)
     const draftText = drafts[slotKey]?.text
     if (!draftText?.trim() || !account) return
-    if (!isGeminiInitialized()) { setShowApiKeyModal(true); return }
 
     setImageStates(prev => ({ ...prev, [slotKey]: { generating: true } }))
     try {

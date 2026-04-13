@@ -2,11 +2,13 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import { Layout } from './components'
 import { ProductList, ProductSetup, AccountHub, ContentStudio, Calendar, Planner, Pulse, Playbook } from './views'
+import { Login } from './views/Login/Login'
 
 function App() {
   return (
     <AppProvider>
       <Routes>
+        <Route path="/login" element={<Login />} />
         <Route path="/" element={<Layout />}>
           <Route index element={<Navigate to="/products" replace />} />
           <Route path="products" element={<ProductList />} />

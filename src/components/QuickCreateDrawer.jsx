@@ -7,7 +7,7 @@ import {
 } from '../services/storage'
 import {
   generateMultiAccountDrafts, regenerateDraft,
-  getTrendBrief, generatePostImage, isGeminiInitialized,
+  getTrendBrief, generatePostImage,
 } from '../services/gemini'
 import { PLATFORM_BEST_TIMES, formatTime12 } from '../services/planner'
 import { MOOD_PRESETS } from '../data/visualPresets'
@@ -69,7 +69,7 @@ const TONE_OPTIONS = [
 
 export function QuickCreateDrawer() {
   const navigate = useNavigate()
-  const { showQuickCreate, setShowQuickCreate, setShowApiKeyModal, quickCreateDate, setQuickCreateDate } = useApp()
+  const { showQuickCreate, setShowQuickCreate, quickCreateDate, setQuickCreateDate } = useApp()
 
   // data
   const [dataLoaded, setDataLoaded] = useState(false)
@@ -228,7 +228,6 @@ export function QuickCreateDrawer() {
 
   async function fetchBrief() {
     if (!product) return
-    if (!isGeminiInitialized()) { setShowApiKeyModal(true); return }
     setBriefFetching(true)
     try {
       const newBrief = await getTrendBrief({
@@ -301,7 +300,6 @@ export function QuickCreateDrawer() {
 
   async function handleGenerate() {
     if (!angle.trim() || selectedAccountIds.length === 0) return
-    if (!isGeminiInitialized()) { setShowApiKeyModal(true); return }
     const slots = buildDraftSlots(selectedAccountIds, linkedAccounts, product)
     if (slots.length === 0) return
     setGenerating(true)
@@ -354,7 +352,6 @@ export function QuickCreateDrawer() {
     const { accountId, language } = parseSlotKey(slotKey)
     const account = linkedAccounts.find(a => a.id === accountId)
     if (!account) return
-    if (!isGeminiInitialized()) { setShowApiKeyModal(true); return }
     if (drafts[slotKey]?.text && !confirm('Your edits will be lost. Regenerate?')) return
     setDrafts(prev => ({ ...prev, [slotKey]: { ...prev[slotKey], generating: true, error: null } }))
     try {
@@ -385,7 +382,6 @@ export function QuickCreateDrawer() {
     const account = linkedAccounts.find(a => a.id === accountId)
     const draftText = drafts[slotKey]?.text
     if (!draftText?.trim() || !account) return
-    if (!isGeminiInitialized()) { setShowApiKeyModal(true); return }
     setImageStates(prev => ({ ...prev, [slotKey]: { generating: true } }))
     try {
       const result = await generatePostImage({

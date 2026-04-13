@@ -11,7 +11,7 @@ An internal tool for validating product ideas through coordinated social media a
 | **Playbook** | `/playbook` | Per-platform limits (char, word, hashtag, link, video) and named content strategies. Active strategy directives are injected into every draft. Limits are injected as hard constraints. |
 | **Content Studio** | `/studio/:id` | Generate platform-adapted drafts for multiple accounts × languages in parallel. Visual descriptor panel, AI image generation, inline editing, char/word count, approve/needs-work status, save to calendar. |
 | **Calendar Planner** | `/planner` | Generate a full month of skeleton post slots based on best-practice frequency, optimal times, and platform-specific day distribution. |
-| **Calendar** | `/calendar` | Monthly grid of all posts. Draft slots (from planner) and ready posts (from studio) shown with distinct visual states. |
+| **Calendar** | `/calendar` | Monthly grid of all posts. Draft slots (from planner) and ready posts (from studio) shown with distinct visual states. Click any date to open Quick Create pre-filled with that date. |
 | **Pulse** | `/pulse` | Daily trend and planning view. Upcoming cultural moments (next 6 weeks, region-aware) alongside live trend snapshots across Twitter, Reddit, Instagram, and the web. Star trends, send directly to Content Studio as an angle. |
 | **Quick Create** | Sidebar `+ New Post` | Right-side overlay drawer. 4-step wizard to go from zero to a scheduled post without leaving the current view. |
 
@@ -109,6 +109,8 @@ On save, each approved draft is written to the calendar as a `ready` post. If an
 4. **Confirm** — summary of total posts, then save. All slots land in the calendar as drafts.
 
 Draft slots show as dashed amber chips on the calendar. Click to open the drawer and hit **Write in Studio →** — the studio opens with angle, account, and date pre-filled.
+
+**Click-to-create:** Clicking any date cell on the calendar grid opens the Quick Create drawer with that date pre-filled in the Schedule step. Clicking an existing post chip opens the post detail drawer as usual.
 
 ### Pulse
 

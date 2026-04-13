@@ -69,7 +69,7 @@ const TONE_OPTIONS = [
 
 export function QuickCreateDrawer() {
   const navigate = useNavigate()
-  const { showQuickCreate, setShowQuickCreate, setShowApiKeyModal } = useApp()
+  const { showQuickCreate, setShowQuickCreate, setShowApiKeyModal, quickCreateDate, setQuickCreateDate } = useApp()
 
   // data
   const [dataLoaded, setDataLoaded] = useState(false)
@@ -133,6 +133,7 @@ export function QuickCreateDrawer() {
         if (prods[0].visualTones?.length > 0) setVisualTones(prods[0].visualTones)
         if (prods[0].preferredColors?.length > 0) setPreferredColors(prods[0].preferredColors)
       }
+      if (quickCreateDate) setSaveDate(quickCreateDate)
       setDataLoaded(true)
     }
     load()
@@ -171,6 +172,7 @@ export function QuickCreateDrawer() {
       setSaveTime('')
       setSaving(false)
       setSaveError(null)
+      setQuickCreateDate(null)
     }, 300)
     return () => clearTimeout(t)
   }, [showQuickCreate])

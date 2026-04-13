@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { getAllCalendarPosts, deleteCalendarPost, updateCalendarPost } from '../../services/storage'
 import { PlatformBadge, TrashIcon } from '../../components/Icons'
 import { formatTime12 } from '../../services/planner'
+import { useApp } from '../../context/AppContext'
 import './Calendar.css'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -11,6 +12,7 @@ const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 export function Calendar() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { setShowQuickCreate, setQuickCreateDate } = useApp()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
@@ -127,15 +129,20 @@ export function Calendar() {
             if (!day) return <div key={`empty-${i}`} className="cal-cell cal-cell-empty" />
             const dayPosts = postsForDay(day)
             const today = now.getFullYear() === year && now.getMonth() === month && now.getDate() === day
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
             return (
-              <div key={day} className={`cal-cell${today ? ' cal-cell-today' : ''}`}>
+              <div
+                key={day}
+                className={`cal-cell cal-cell-clickable${today ? ' cal-cell-today' : ''}`}
+                onClick={() => { setQuickCreateDate(dateStr); setShowQuickCreate(true) }}
+              >
                 <div className="cal-cell-day">{day}</div>
                 <div className="cal-cell-posts">
                   {dayPosts.slice(0, 3).map(p => (
                     <div
                       key={p.id}
                       className={`cal-post-chip${p.status === 'draft' ? ' draft' : ''}`}
-                      onClick={() => setSelectedPost(p)}
+                      onClick={e => { e.stopPropagation(); setSelectedPost(p) }}
                       title={p.status === 'draft' ? `Draft · @${p.accountHandle}` : p.copy?.slice(0, 80)}
                     >
                       <PlatformBadge platform={p.platform} size={9} />
@@ -144,7 +151,7 @@ export function Calendar() {
                     </div>
                   ))}
                   {dayPosts.length > 3 && (
-                    <div className="cal-post-more">+{dayPosts.length - 3} more</div>
+                    <div className="cal-post-more" onClick={e => e.stopPropagation()}>+{dayPosts.length - 3} more</div>
                   )}
                 </div>
               </div>

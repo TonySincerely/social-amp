@@ -7,6 +7,7 @@ export function AppProvider({ children }) {
   const [apiKeySet, setApiKeySet] = useState(false)
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
   const [showQuickCreate, setShowQuickCreate] = useState(false)
+  const [quickCreateDate, setQuickCreateDate] = useState(null)
 
   useEffect(() => {
     const key = getStoredApiKey()
@@ -22,7 +23,7 @@ export function AppProvider({ children }) {
   }
 
   return (
-    <AppContext.Provider value={{ apiKeySet, showApiKeyModal, setShowApiKeyModal, onApiKeySaved, showQuickCreate, setShowQuickCreate }}>
+    <AppContext.Provider value={{ apiKeySet, showApiKeyModal, setShowApiKeyModal, onApiKeySaved, showQuickCreate, setShowQuickCreate, quickCreateDate, setQuickCreateDate }}>
       {children}
     </AppContext.Provider>
   )

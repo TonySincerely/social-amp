@@ -110,16 +110,16 @@ export function ContentStudio() {
       }
 
       if (prefillPost) {
-        const { angle: a, identity: id, postTone: pt, accountId, date, copy } = prefillPost
+        const { angle: a, identity: id, postTone: pt, accountId, date, copy, language, imageBase64, imageMimeType, imagePrompt } = prefillPost
         if (a) { setAngle(a); setAngleInput(a) }
         if (id) setIdentity(id)
         if (pt) setPostTone(pt)
         if (accountId) {
           setSelectedAccountIds([accountId])
-          // Use English as default slot key for prefill
-          const slotKey = `${accountId}::English`
+          const slotKey = `${accountId}::${language || 'English'}`
           setActiveTab(slotKey)
           if (copy) setDrafts({ [slotKey]: { text: copy, status: 'approved', generating: false } })
+          if (imageBase64) setImageStates({ [slotKey]: { generating: false, base64: imageBase64, mimeType: imageMimeType, prompt: imagePrompt } })
         }
         if (date) setSaveDate(date)
       }
@@ -275,7 +275,14 @@ export function ContentStudio() {
         platform: account.platform,
         productName: product.name,
       })
-      setImageStates(prev => ({ ...prev, [slotKey]: { generating: false, ...result } }))
+      // Propagate to all sibling language slots for the same account
+      const allSlots = buildDraftSlots(selectedAccountIds, accounts, product)
+      const siblingKeys = allSlots.filter(s => s.accountId === accountId).map(s => s.key)
+      setImageStates(prev => {
+        const updates = {}
+        siblingKeys.forEach(k => { updates[k] = { generating: false, ...result } })
+        return { ...prev, ...updates }
+      })
     } catch (e) {
       setImageStates(prev => ({ ...prev, [slotKey]: { generating: false, error: e.message } }))
     }
@@ -309,9 +316,11 @@ export function ContentStudio() {
             })
           }
 
+          const imgState = imageStates[slot.key]
           return saveCalendarPost({
             productId,
             accountId: slot.accountId,
+            language: slot.language,
             platform: account?.platform,
             accountHandle: account?.handle,
             copy,
@@ -322,6 +331,11 @@ export function ContentStudio() {
             monthKey,
             scheduledOffset: i,
             status: 'ready',
+            ...(imgState?.base64 ? {
+              imageBase64: imgState.base64,
+              imageMimeType: imgState.mimeType,
+              imagePrompt: imgState.prompt,
+            } : {}),
           })
         })
       )

@@ -203,13 +203,15 @@ All data is stored locally in IndexedDB under the `socialamp` database (v3).
 - `tonePreset` — default tone when no persona is set (educator, puncher, helper, jester, closer, storyteller, neutral)
 - `persona` — free text; when set, overrides all identity and tone instructions at generation time
 
-**Calendar posts** — `{ id, productId, accountId, platform, accountHandle, copy, angle, identity, postTone, date, time, monthKey, scheduledOffset, status, imageBase64?, imageMimeType?, imagePrompt?, createdAt, updatedAt }`
+**Calendar posts** — `{ id, productId, accountId, platform, accountHandle, copy, angle, identity, postTone, date, time, monthKey, scheduledOffset, status, language?, imageBase64?, imageMimeType?, imagePrompt?, createdAt, updatedAt }`
 
 `status` — `'draft'` for planner skeleton slots · `'ready'` for posts with written copy.
 
+`language` — optional; the language the post was written in (e.g. `'Traditional Chinese'`). Defaults to `'English'` when absent. Used to restore the correct slot when editing a post back in Content Studio.
+
 `time` — optional `HH:MM` string set when the post is saved from Quick Create or Content Studio with a time selected.
 
-`imageBase64` / `imageMimeType` / `imagePrompt` — optional; present when an image was generated for the post in Content Studio or Quick Create.
+`imageBase64` / `imageMimeType` / `imagePrompt` — optional; present when an image was generated for the post in Content Studio or Quick Create. When an account has multiple language slots, generating an image for any one slot copies it to all sibling slots for that account.
 
 **Trend snapshots** — `{ id, location, region, fetchedAt, trends[], upcomingBuzz[], createdAt }`
 

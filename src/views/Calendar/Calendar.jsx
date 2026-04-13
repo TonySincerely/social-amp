@@ -72,6 +72,10 @@ export function Calendar() {
           postTone: post.postTone || 'promoting',
           accountId: post.accountId,
           date: post.date,
+          language: post.language || 'English',
+          imageBase64: post.imageBase64,
+          imageMimeType: post.imageMimeType,
+          imagePrompt: post.imagePrompt,
         },
       },
     })

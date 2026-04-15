@@ -74,6 +74,9 @@ export function ContentStudio() {
   const [visualOpen, setVisualOpen] = useState(false)
   const [imageStates, setImageStates] = useState({}) // keyed by slotKey
 
+  // Per-session patterns overrides: missing key = enabled, false = disabled
+  const [patternsOverrides, setPatternsOverrides] = useState({})
+
   // Save to calendar modal
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [saveDate, setSaveDate] = useState('')
@@ -158,6 +161,10 @@ export function ContentStudio() {
     )
   }
 
+  function togglePatterns(accountId) {
+    setPatternsOverrides(prev => ({ ...prev, [accountId]: prev[accountId] !== false ? false : true }))
+  }
+
   function toggleVisualTone(tone) {
     setVisualTones(prev => prev.includes(tone) ? prev.filter(t => t !== tone) : [...prev, tone])
   }
@@ -198,10 +205,16 @@ export function ContentStudio() {
       platformLimits[platform] = cfg.limits || null
     })
 
-    // Enrich accounts with resolved language per slot
+    // Enrich accounts with resolved language per slot and patterns override
     const accountsForGeneration = slots.map(slot => {
       const account = accounts.find(a => a.id === slot.accountId)
-      return { ...account, resolvedLanguage: slot.language, _slotKey: slot.key }
+      const patternsEnabled = patternsOverrides[slot.accountId] !== false
+      return {
+        ...account,
+        resolvedLanguage: slot.language,
+        _slotKey: slot.key,
+        postPatterns: patternsEnabled ? (account.postPatterns || null) : null,
+      }
     })
 
     const results = await generateMultiAccountDrafts({
@@ -243,6 +256,7 @@ export function ContentStudio() {
       const practices = activeStrategy
         ? (activeStrategy.directives?.length > 0 ? activeStrategy.directives : [activeStrategy.content])
         : []
+      const patternsEnabled = patternsOverrides[accountId] !== false
       const text = await regenerateDraft({
         angle: angle.trim(),
         account,
@@ -253,6 +267,7 @@ export function ContentStudio() {
         limits: cfg?.limits || null,
         visualDescriptors: [...visualTones, ...preferredColors],
         language,
+        postPatterns: patternsEnabled ? (account.postPatterns || null) : null,
       })
       setDrafts(prev => ({ ...prev, [slotKey]: { text, status: 'pending', generating: false } }))
     } catch (e) {
@@ -554,6 +569,16 @@ export function ContentStudio() {
                       )}
                       {a.persona && (
                         <span className="cs-persona-indicator" title={a.persona}>persona</span>
+                      )}
+                      {a.postPatterns?.length > 0 && (
+                        <button
+                          className={`cs-patterns-toggle${patternsOverrides[a.id] !== false ? ' on' : ' off'}`}
+                          onClick={e => { e.stopPropagation(); togglePatterns(a.id) }}
+                          title={patternsOverrides[a.id] !== false ? 'Patterns active — click to disable for this session' : 'Patterns disabled — click to enable'}
+                          type="button"
+                        >
+                          ✦ patterns
+                        </button>
                       )}
                     </div>
                   )

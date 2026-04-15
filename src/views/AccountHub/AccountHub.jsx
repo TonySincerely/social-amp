@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getAllAccounts, saveAccount, deleteAccount } from '../../services/storage'
+import { distillPostPatterns } from '../../services/gemini'
 import { PlatformBadge, PlusIcon, EditIcon, TrashIcon, CloseIcon } from '../../components/Icons'
 import { LANGUAGES } from '../../data/languages'
 import './AccountHub.css'
@@ -14,6 +15,8 @@ const EMPTY_FORM = {
   languages: [],
   persona: '',
   tonePreset: 'neutral',
+  topPostsRaw: '',
+  postPatterns: null,
 }
 
 export function AccountHub() {
@@ -24,6 +27,8 @@ export function AccountHub() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
+  const [distilling, setDistilling] = useState(false)
+  const [patternsOpen, setPatternsOpen] = useState(false)
 
   useEffect(() => {
     load()
@@ -39,6 +44,7 @@ export function AccountHub() {
     setEditing(null)
     setForm(EMPTY_FORM)
     setErrors({})
+    setPatternsOpen(false)
     setShowModal(true)
   }
 
@@ -51,8 +57,11 @@ export function AccountHub() {
       languages: account.languages || (account.language ? [account.language] : []),
       persona: account.persona || '',
       tonePreset: account.tonePreset || 'neutral',
+      topPostsRaw: account.topPostsRaw || '',
+      postPatterns: account.postPatterns || null,
     })
     setErrors({})
+    setPatternsOpen(!!(account.topPostsRaw || account.postPatterns?.length))
     setShowModal(true)
   }
 
@@ -78,6 +87,8 @@ export function AccountHub() {
         languages: form.languages.length > 0 ? form.languages : null,
         persona: form.persona.trim() || null,
         tonePreset: form.tonePreset,
+        topPostsRaw: form.topPostsRaw.trim() || null,
+        postPatterns: form.postPatterns || null,
       }
       await saveAccount(data)
       setShowModal(false)
@@ -86,6 +97,20 @@ export function AccountHub() {
       setErrors({ _global: err.message })
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDistill() {
+    if (!form.topPostsRaw.trim()) return
+    setDistilling(true)
+    setErrors(prev => ({ ...prev, _distill: null }))
+    try {
+      const patterns = await distillPostPatterns(form.topPostsRaw, form.platform)
+      set('postPatterns', patterns)
+    } catch (err) {
+      setErrors(prev => ({ ...prev, _distill: err.message }))
+    } finally {
+      setDistilling(false)
     }
   }
 
@@ -140,6 +165,9 @@ export function AccountHub() {
                   ? <span className="voice-tag voice-persona">Persona set</span>
                   : <span className="voice-tag">{a.tonePreset || 'neutral'}</span>
                 }
+                {a.postPatterns?.length > 0 && (
+                  <span className="voice-tag voice-patterns">✦ patterns</span>
+                )}
                 {a.languages?.map(l => (
                   <span key={l} className="voice-tag voice-lang">{l}</span>
                 ))}
@@ -284,6 +312,62 @@ export function AccountHub() {
                   value={form.persona}
                   onChange={e => set('persona', e.target.value)}
                 />
+              </div>
+
+              {/* Writing patterns */}
+              <div className="ps-field">
+                <div className="ah-patterns-toggle" onClick={() => setPatternsOpen(o => !o)}>
+                  <span className={`ah-collapse-arrow${patternsOpen ? ' open' : ''}`}>›</span>
+                  <span className="ps-label" style={{ margin: 0 }}>Writing patterns</span>
+                  <span className="ps-hint">optional — learn from top posts</span>
+                  {form.postPatterns?.length > 0 && (
+                    <span className="ah-patterns-badge">✦ {form.postPatterns.length} patterns</span>
+                  )}
+                </div>
+                {patternsOpen && (
+                  <>
+                    <textarea
+                      rows={6}
+                      placeholder={'Paste 3–10 of your top-performing posts, separated by ---\n\nMore posts = better patterns.'}
+                      value={form.topPostsRaw}
+                      onChange={e => { set('topPostsRaw', e.target.value); set('postPatterns', null) }}
+                      style={{ marginTop: 8 }}
+                    />
+                    <div className="ah-patterns-actions">
+                      <button
+                        className="btn btn-ghost ah-distill-btn"
+                        onClick={handleDistill}
+                        disabled={!form.topPostsRaw.trim() || distilling}
+                        type="button"
+                      >
+                        {distilling
+                          ? <><div className="spinner" style={{ width: 11, height: 11 }} /> Distilling…</>
+                          : '✦ Distill patterns'
+                        }
+                      </button>
+                      {form.postPatterns?.length > 0 && (
+                        <button
+                          className="btn btn-ghost"
+                          onClick={() => set('postPatterns', null)}
+                          type="button"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    {errors._distill && <div className="ps-error">{errors._distill}</div>}
+                    {form.postPatterns?.length > 0 && (
+                      <div className="ah-patterns-list">
+                        {form.postPatterns.map((p, i) => (
+                          <div key={i} className="ah-pattern-item">
+                            <span className="ah-pattern-num">{i + 1}</span>
+                            <span>{p}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               {errors._global && <div className="ps-global-error">{errors._global}</div>}

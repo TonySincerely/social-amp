@@ -6,7 +6,7 @@ An internal tool for validating product ideas through coordinated social media a
 
 | Module | Path | Purpose |
 |--------|------|---------|
-| **Products** | `/products` | Create and manage product briefs. Name, problem statement, target persona, KSPs, platform selection, stage, visual tones, preferred colors, and content languages. |
+| **Products** | `/products` | Create and manage product briefs. Name, problem statement, target persona, KSPs, platform selection, stage, visual tones, preferred colors, and content languages. Import from any public URL — Gemini fetches the page and pre-fills the brief. |
 | **Accounts** | `/accounts` | Manage social accounts and their posting voices. Tone preset, free-text persona, and per-account language tags. |
 | **Playbook** | `/playbook` | Per-platform limits (char, word, hashtag, link, video) and named content strategies. Active strategy directives are injected into every draft. Limits are injected as hard constraints. |
 | **Content Studio** | `/studio/:id` | Generate platform-adapted drafts for multiple accounts × languages in parallel. Visual descriptor panel, AI image generation, inline editing, char/word count, approve/needs-work status, save to calendar. |
@@ -24,6 +24,8 @@ Create a product brief — name, problem statement, target persona, key selling 
 Hard required fields (block save): name, problem statement, target persona, at least one platform.
 Soft required fields (warning only): stage, validation goal.
 
+**Import from URL** — paste any public product page, landing page, App Store listing, or competitor URL into the import field at the top of the new product form. Gemini fetches the page directly via `url_context` and extracts name, problem statement, target persona, and KSPs. Fields that can't be confidently extracted are left blank. Available on new products only — review and edit everything before saving.
+
 **Visual tones** — optional mood or style descriptors (e.g. *minimalist*, *editorial*, *warm*) stored on the product and pre-loaded in Content Studio. Injected into draft prompts as a `Visual aesthetic:` line and used as context for image generation.
 
 **Preferred colors** — optional color descriptions (e.g. *warm ivory*, *deep navy*) stored alongside visual tones.
@@ -34,11 +36,12 @@ On save, the product opens directly in the Content Studio.
 
 ### Accounts
 
-Accounts store platform, handle, follower count, one or more **language tags**, a **tone preset**, and an optional free-text **persona**.
+Accounts store platform, handle, follower count, one or more **language tags**, a **tone preset**, an optional free-text **persona**, and optional **writing patterns** distilled from top posts.
 
 - **Language tags** — per-account language selection (e.g. English, Traditional Chinese). When set, overrides the product's language list for that account. When not set, falls back to the product's language list, then English.
 - **Tone preset** — default voice style when no persona is set.
 - **Persona** — free text; overrides tone preset and all identity/tone instructions at generation time.
+- **Writing patterns** — paste 3–10 top-performing posts (separated by `---`) and hit **✦ Distill patterns**. Gemini analyzes the posts and extracts 5–8 behavioral rules covering hook structure, sentence rhythm, formatting conventions, hashtag behavior, CTA style, and voice markers. These patterns are stored on the account and injected into every draft as a voice layer that supplements the persona. During generation in Content Studio and Quick Create, a per-account **✦ patterns** toggle lets you disable them for the current session without editing the account.
 
 ### Playbook
 
@@ -95,7 +98,7 @@ The language resolution chain: `account.languages[] → product.languages[] → 
 The **+ New Post** button in the sidebar opens a right-side overlay drawer accessible from anywhere in the app. A 4-step wizard replaces the full Content Studio flow for fast single-post creation:
 
 1. **Context** — select a product (auto-selected if only one exists), pick identity and tone from dropdowns.
-2. **Setup** — enter or select an angle. If a trend brief exists, angles are shown as clickable chips immediately; a refresh icon lets you update them. A collapsible Visual section carries over mood and color descriptors. Select accounts to generate for. Angle and accounts are optional — if either is missing, a warning banner replaces the footer and asks you to confirm before continuing. Missing context reduces draft quality but doesn't block.
+2. **Setup** — enter or select an angle. If a trend brief exists, angles are shown as clickable chips immediately; a refresh icon lets you update them. A collapsible **Trends & Moments** panel surfaces upcoming cultural events (next 2 weeks, region-aware) and live trending topics from the latest Pulse snapshot — clicking any chip fills the angle field. Starred trends appear first. A collapsible Visual section carries over mood and color descriptors. Select accounts to generate for. Angle and accounts are optional — if either is missing, a warning banner replaces the footer and asks you to confirm before continuing. Missing context reduces draft quality but doesn't block.
 3. **Draft** — generate one draft per account × language slot in parallel, using the same Playbook limits and active strategy directives as Content Studio. Per-tab approve/needs-work controls. At least one approved draft is required to advance; if some remain unapproved, a confirmation dialog warns that they will be discarded.
 4. **Schedule** — pick a publish date and time (down to the hour). The dominant platform of the selected accounts drives an inline time recommendation (e.g. *11:00 AM recommended · instagram*) with a one-click "Use" button. The step 4 summary lists only approved posts and shows an "image" badge on any slot with a generated image.
 
@@ -129,10 +132,11 @@ Every draft is shaped by layered instructions in this order (bottom = highest mo
 2. Voice — identity instruction or persona override
 3. Tone — post intent (omitted when persona is set)
 4. Visual aesthetic — mood/style descriptors and preferred colors (omitted when empty)
-5. Writing rules — native format, angle-first, subtle CTA
-6. **Language directive** — injected for non-English drafts only
-7. **Hard constraints** — platform limits from Playbook (char, word, hashtag, link)
-8. **Strategy directives** — extracted directives from active Playbook strategy
+5. **Writing patterns** — behavioral directives distilled from the account's top posts (omitted when none or toggled off)
+6. Writing rules — native format, angle-first, subtle CTA
+7. **Language directive** — injected for non-English drafts only
+8. **Hard constraints** — platform limits from Playbook (char, word, hashtag, link)
+9. **Strategy directives** — extracted directives from active Playbook strategy
 
 Constraints at positions 6–8 are placed last in the prompt to maximise adherence. Word limit is the most reliable length control — set it in Playbook Limits rather than relying on a strategy directive alone.
 
@@ -197,11 +201,13 @@ All data is stored locally in IndexedDB under the `socialamp` database (v3).
 - `preferredColors[]` — color descriptions (e.g. `["warm ivory", "deep navy"]`)
 - `languages[]` — default language list for the product (e.g. `["English", "Traditional Chinese"]`)
 
-**Accounts** — `{ id, handle, platform, followerCount, tonePreset, persona, languages[], createdAt, updatedAt }`
+**Accounts** — `{ id, handle, platform, followerCount, tonePreset, persona, languages[], topPostsRaw?, postPatterns[]?, createdAt, updatedAt }`
 
 - `languages[]` — per-account language override; if set, takes priority over the product's language list
 - `tonePreset` — default tone when no persona is set (educator, puncher, helper, jester, closer, storyteller, neutral)
 - `persona` — free text; when set, overrides all identity and tone instructions at generation time
+- `topPostsRaw` — optional; the raw pasted posts used to generate patterns (kept for re-distillation after edits)
+- `postPatterns[]` — optional; 5–8 behavioral writing directives distilled from `topPostsRaw`, injected into drafts as a voice modifier alongside persona
 
 **Calendar posts** — `{ id, productId, accountId, platform, accountHandle, copy, angle, identity, postTone, date, time, monthKey, scheduledOffset, status, language?, imageBase64?, imageMimeType?, imagePrompt?, createdAt, updatedAt }`
 

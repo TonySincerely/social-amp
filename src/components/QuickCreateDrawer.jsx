@@ -4,7 +4,9 @@ import { useApp } from '../context/AppContext'
 import {
   getAllProducts, getAllAccounts, getAllPlatformConfigs,
   seedPlatformDefaults, updateProduct, saveCalendarPost,
+  getAllTrendSnapshots, getLocalData,
 } from '../services/storage'
+import { getUpcomingEvents } from '../data/upcomingEvents'
 import {
   generateMultiAccountDrafts, regenerateDraft,
   getTrendBrief, generatePostImage,
@@ -40,6 +42,20 @@ function parseSlotKey(key) {
   const idx = key.indexOf('::')
   if (idx === -1) return { accountId: key, language: 'English' }
   return { accountId: key.slice(0, idx), language: key.slice(idx + 2) }
+}
+
+const LOCATION_REGION = {
+  'United States': 'US', 'United Kingdom': 'UK',
+  'Canada': 'CA', 'Australia': 'AU', 'Global / Other': 'global',
+}
+
+function timeAgo(isoStr) {
+  const mins = Math.floor((Date.now() - new Date(isoStr)) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
 }
 
 function getImageAspectStyle(platform) {
@@ -95,8 +111,13 @@ export function QuickCreateDrawer() {
   const [visualToneInput, setVisualToneInput] = useState('')
   const [colorInput, setColorInput] = useState('')
   const [selectedAccountIds, setSelectedAccountIds] = useState([])
+  const [patternsOverrides, setPatternsOverrides] = useState({})
   const [showStep2Warning, setShowStep2Warning] = useState(false)
   const [step2Warnings, setStep2Warnings] = useState([])
+  const [trendsOpen, setTrendsOpen] = useState(false)
+  const [pulseUpcoming, setPulseUpcoming] = useState([])
+  const [pulseTrends, setPulseTrends] = useState([])
+  const [snapshotAge, setSnapshotAge] = useState(null)
 
   // step 3
   const [drafts, setDrafts] = useState({})
@@ -117,10 +138,11 @@ export function QuickCreateDrawer() {
     let cancelled = false
     async function load() {
       await seedPlatformDefaults()
-      const [prods, accs, allConfigs] = await Promise.all([
+      const [prods, accs, allConfigs, snapshots] = await Promise.all([
         getAllProducts(),
         getAllAccounts(),
         getAllPlatformConfigs(),
+        getAllTrendSnapshots(),
       ])
       if (cancelled) return
       setProducts(prods)
@@ -128,6 +150,20 @@ export function QuickCreateDrawer() {
       const cfgMap = {}
       allConfigs.forEach(c => { cfgMap[c.platform] = c })
       setPlatformConfigs(cfgMap)
+      const region = LOCATION_REGION[getLocalData('pulse_location', 'United States')] || 'US'
+      setPulseUpcoming(getUpcomingEvents(region, 2))
+      if (snapshots.length > 0) {
+        const latest = snapshots[0]
+        const starredSet = new Set(getLocalData('pulse_starred', []))
+        const seen = new Set()
+        const trends = (latest.trends || [])
+          .filter(t => { if (seen.has(t.topic)) return false; seen.add(t.topic); return true })
+          .map(t => ({ ...t, starred: starredSet.has(t.id) }))
+          .sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0))
+          .slice(0, 8)
+        setPulseTrends(trends)
+        setSnapshotAge(timeAgo(latest.fetchedAt))
+      }
       if (prods.length === 1) {
         setSelectedProductId(prods[0].id)
         if (prods[0].visualTones?.length > 0) setVisualTones(prods[0].visualTones)
@@ -162,6 +198,7 @@ export function QuickCreateDrawer() {
       setVisualToneInput('')
       setColorInput('')
       setSelectedAccountIds([])
+      setPatternsOverrides({})
       setShowStep2Warning(false)
       setStep2Warnings([])
       setDrafts({})
@@ -173,6 +210,10 @@ export function QuickCreateDrawer() {
       setSaving(false)
       setSaveError(null)
       setQuickCreateDate(null)
+      setTrendsOpen(false)
+      setPulseUpcoming([])
+      setPulseTrends([])
+      setSnapshotAge(null)
     }, 300)
     return () => clearTimeout(t)
   }, [showQuickCreate])
@@ -189,6 +230,7 @@ export function QuickCreateDrawer() {
   const allApproved = draftSlots.length > 0 && approvedCount === draftSlots.length
   const hasDrafts = draftSlots.some(s => drafts[s.key]?.text)
   const visualDescriptorCount = visualTones.length + preferredColors.length
+  const trendsCount = pulseUpcoming.length
   const activeSlot = draftSlots.find(s => s.key === activeTab)
   const activeAccount = activeSlot ? linkedAccounts.find(a => a.id === activeSlot.accountId) : null
   const activeDraft = activeTab ? drafts[activeTab] : null
@@ -266,6 +308,10 @@ export function QuickCreateDrawer() {
     )
   }
 
+  function togglePatterns(accountId) {
+    setPatternsOverrides(prev => ({ ...prev, [accountId]: prev[accountId] !== false ? false : true }))
+  }
+
   // Soft validation for step 2 — warn if missing context, allow proceeding
   function handleStep2Next() {
     const warnings = []
@@ -320,7 +366,13 @@ export function QuickCreateDrawer() {
 
     const accountsForGeneration = slots.map(slot => {
       const account = linkedAccounts.find(a => a.id === slot.accountId)
-      return { ...account, resolvedLanguage: slot.language, _slotKey: slot.key }
+      const patternsEnabled = patternsOverrides[slot.accountId] !== false
+      return {
+        ...account,
+        resolvedLanguage: slot.language,
+        _slotKey: slot.key,
+        postPatterns: patternsEnabled ? (account.postPatterns || null) : null,
+      }
     })
 
     const results = await generateMultiAccountDrafts({
@@ -360,6 +412,7 @@ export function QuickCreateDrawer() {
       const practices = activeStrategy
         ? (activeStrategy.directives?.length > 0 ? activeStrategy.directives : [activeStrategy.content])
         : []
+      const patternsEnabled = patternsOverrides[accountId] !== false
       const text = await regenerateDraft({
         angle: angle.trim(),
         account,
@@ -370,6 +423,7 @@ export function QuickCreateDrawer() {
         limits: cfg?.limits || null,
         visualDescriptors: [...visualTones, ...preferredColors],
         language,
+        postPatterns: patternsEnabled ? (account.postPatterns || null) : null,
       })
       setDrafts(prev => ({ ...prev, [slotKey]: { text, status: 'pending', generating: false } }))
     } catch (e) {
@@ -617,6 +671,61 @@ export function QuickCreateDrawer() {
                     />
                   </div>
 
+                  {/* Trends & Moments */}
+                  <div className="qc-field qc-field--collapsible">
+                    <div className="qc-collapsible-title" onClick={() => setTrendsOpen(o => !o)}>
+                      <span className={`qc-collapse-arrow${trendsOpen ? ' open' : ''}`}>›</span>
+                      Trends & Moments
+                      {trendsCount > 0 && <span className="qc-visual-count">{trendsCount}</span>}
+                    </div>
+                    {trendsOpen && (
+                      <div className="qc-trends-body">
+                        {pulseUpcoming.length === 0 && pulseTrends.length === 0 ? (
+                          <div className="qc-trends-empty">No trend data yet — visit Pulse to fetch a snapshot.</div>
+                        ) : (
+                          <>
+                            {pulseUpcoming.length > 0 && (
+                              <>
+                                <div className="qc-trends-sublabel">Upcoming</div>
+                                <div className="qc-trends-chips">
+                                  {pulseUpcoming.map(ev => (
+                                    <button
+                                      key={ev.name}
+                                      className={`qc-trend-chip qc-trend-chip--upcoming${angle === ev.angleHint ? ' selected' : ''}`}
+                                      onClick={() => { setAngle(ev.angleHint); setAngleInput(ev.angleHint) }}
+                                    >
+                                      {ev.name} · {ev.daysUntil}d
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                            {pulseTrends.length > 0 && (
+                              <>
+                                <div className="qc-trends-sublabel">
+                                  Trending
+                                  {snapshotAge && <span className="qc-trends-age">{snapshotAge}</span>}
+                                </div>
+                                <div className="qc-trends-chips">
+                                  {pulseTrends.map((t, i) => (
+                                    <button
+                                      key={i}
+                                      className={`qc-trend-chip${angle === t.topic ? ' selected' : ''}`}
+                                      onClick={() => { setAngle(t.topic); setAngleInput(t.topic) }}
+                                    >
+                                      {t.starred && <span className="qc-trend-star">★</span>}
+                                      {t.topic}
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Visual */}
                   <div className="qc-field qc-field--collapsible">
                     <div className="qc-collapsible-title" onClick={() => setVisualOpen(o => !o)}>
@@ -703,6 +812,16 @@ export function QuickCreateDrawer() {
                                 <span className="qc-lang-indicator">{langs.map(langShort).join(' · ')}</span>
                               )}
                               {a.persona && <span className="qc-persona-badge">persona</span>}
+                              {a.postPatterns?.length > 0 && (
+                                <button
+                                  className={`qc-patterns-toggle${patternsOverrides[a.id] !== false ? ' on' : ' off'}`}
+                                  onClick={e => { e.stopPropagation(); togglePatterns(a.id) }}
+                                  title={patternsOverrides[a.id] !== false ? 'Patterns active — click to disable for this session' : 'Patterns disabled — click to enable'}
+                                  type="button"
+                                >
+                                  ✦ patterns
+                                </button>
+                              )}
                             </div>
                           )
                         })}

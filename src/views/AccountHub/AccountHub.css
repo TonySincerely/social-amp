@@ -255,6 +255,92 @@
   width: 100%;
 }
 
+/* Collapse arrow (shared pattern) */
+.ah-collapse-arrow {
+  display: inline-block;
+  font-size: 13px;
+  color: var(--ink-3);
+  transition: transform 0.15s;
+  line-height: 1;
+}
+.ah-collapse-arrow.open { transform: rotate(90deg); }
+
+/* Writing patterns section */
+.voice-tag.voice-patterns {
+  background: var(--purple-l);
+  color: var(--purple);
+  border-color: var(--purple-l);
+}
+
+.ah-patterns-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ah-patterns-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--purple-l);
+  color: var(--purple);
+  border: 1px solid var(--purple-l);
+  margin-left: auto;
+}
+
+.ah-patterns-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ah-distill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.ah-patterns-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.ah-pattern-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.ah-pattern-num {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--purple-l);
+  color: var(--purple);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
 .ah-modal-footer {
   display: flex;
   align-items: center;

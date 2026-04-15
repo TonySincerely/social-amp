@@ -199,6 +199,86 @@ Rules:
   }
 }
 
+// ─── URL Product Extraction ───────────────────────────────────────────────────
+
+/**
+ * Extract product brief fields from a public URL using grounded Gemini.
+ * Returns { name, problemStatement, targetPersona, ksp[] } — nulls for fields
+ * that couldn't be confidently extracted.
+ */
+export async function extractProductFromUrl(url) {
+  if (!genAI) throw new Error('Gemini API not initialized. Please set your API key.')
+  if (!API_KEY) throw new Error('No API key available')
+
+  const modelName = await findAvailableModel()
+
+  const prompt = `You are extracting product information to populate a product brief.
+
+Fetch and read the page at this URL: ${url}
+
+From the actual page content, extract:
+1. Product name — the brand or product name, not the company name if different
+2. Problem statement — what specific problem does this solve, for whom? Write 1–3 clear sentences as if describing it to someone unfamiliar with the product.
+3. Target persona — who is the ideal user? Include role, habits, or pain points (1–2 sentences).
+4. Key selling points — up to 6 concrete, specific benefits or differentiators. Each must be under 15 words and focus on a distinct value.
+
+Only extract what is explicitly on the page. If a field cannot be confidently extracted, return null — do not infer or invent.
+
+Respond ONLY with valid JSON:
+{
+  "name": "Product name or null",
+  "problemStatement": "1–3 sentence problem description or null",
+  "targetPersona": "Target user description or null",
+  "ksp": ["Benefit 1", "Benefit 2"]
+}`
+
+  function parseResult(text) {
+    const data = parseJson(text)
+    return {
+      name: data.name || null,
+      problemStatement: data.problemStatement || null,
+      targetPersona: data.targetPersona || null,
+      ksp: Array.isArray(data.ksp) ? data.ksp.filter(Boolean).slice(0, 6) : [],
+    }
+  }
+
+  // Try 1: url_context — makes a real HTTP request to the URL, reads actual page content
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tools: [{ url_context: {} }],
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        }),
+      }
+    )
+    if (response.ok) {
+      const data = await response.json()
+      const text = data.candidates?.[0]?.content?.parts?.find(p => p.text)?.text
+      if (text) return parseResult(text)
+    }
+  } catch { /* fall through */ }
+
+  // Try 2: Google Search grounding — web search fallback for indexed pages
+  const isV2 = /gemini-2/i.test(modelName)
+  const searchTool = isV2
+    ? { googleSearch: {} }
+    : { googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC' } } }
+  try {
+    const model = genAI.getGenerativeModel({ model: modelName, tools: [searchTool] })
+    const result = await model.generateContent(prompt)
+    return parseResult(result.response.text())
+  } catch { /* fall through */ }
+
+  // Try 3: no tools — last resort
+  const model = genAI.getGenerativeModel({ model: modelName })
+  const result = await model.generateContent(prompt)
+  return parseResult(result.response.text())
+}
+
 // ─── Strategy Distillation ────────────────────────────────────────────────────
 
 /**
@@ -226,6 +306,39 @@ Respond ONLY with a JSON array of strings. Example:
   const text = result.response.text().trim()
   const match = text.match(/\[[\s\S]*\]/)
   if (!match) throw new Error('No directive array found in response')
+  return JSON.parse(match[0])
+}
+
+// ─── Post Pattern Distillation ────────────────────────────────────────────────
+
+/**
+ * Analyze top-performing posts from an account and extract 5–8 behavioral
+ * writing pattern directives an AI can follow to imitate the account's style.
+ * Returns an array of strings.
+ */
+export async function distillPostPatterns(rawText, platform) {
+  if (!genAI) throw new Error('Gemini API not initialized.')
+  const modelName = await findAvailableModel()
+  const model = genAI.getGenerativeModel({ model: modelName })
+
+  const prompt = `You are a social media writing coach. Analyze these top-performing posts from a single ${platform} account.
+
+Identify 5–8 consistent behavioral writing patterns across these posts. Focus on observable, repeatable characteristics: how posts open (question, bold claim, stat, anecdote), sentence rhythm and pacing, formatting style (line breaks, bullet lists, emoji usage), hashtag behavior (count, placement, style), call-to-action approach, and distinctive voice markers (assertiveness, humor, hedging, first/second person).
+
+Posts:
+"""
+${rawText}
+"""
+
+Return 5–8 short, imperative rules an AI writing assistant should follow to closely imitate this account's writing style. Each rule must be one sentence, action-first, and specific enough to produce a recognizable imitation.
+
+Respond ONLY with a JSON array of strings. Example:
+["Open with a punchy one-liner or bold question, never a soft opener.", "Use two line breaks between thoughts — never run ideas together.", "End with a direct question that invites replies.", "Keep hashtags to 3 or fewer, all niche-specific, placed at the end."]`
+
+  const result = await model.generateContent(prompt)
+  const text = result.response.text().trim()
+  const match = text.match(/\[[\s\S]*\]/)
+  if (!match) throw new Error('No pattern array found in response')
   return JSON.parse(match[0])
 }
 
@@ -259,7 +372,7 @@ function buildLimitsBlock(limits) {
 /**
  * Generate a single post draft for one account.
  */
-async function generateDraft({ angle, platform, persona, identity, postTone, product, practices, limits, visualDescriptors, language }) {
+async function generateDraft({ angle, platform, persona, identity, postTone, product, practices, limits, visualDescriptors, language, postPatterns }) {
   if (!genAI) throw new Error('Gemini API not initialized.')
 
   const modelName = await findAvailableModel()
@@ -281,6 +394,9 @@ async function generateDraft({ angle, platform, persona, identity, postTone, pro
   const visualBlock = visualDescriptors?.length > 0
     ? `Visual aesthetic: ${visualDescriptors.join(', ')}\n`
     : ''
+  const postPatternsBlock = postPatterns?.length > 0
+    ? 'Writing style patterns from this account\'s top posts — follow these closely:\n' + postPatterns.map((p, i) => `${i + 1}. ${p}`).join('\n') + '\n'
+    : ''
   const resolvedLanguage = language || 'English'
   const languageBlock = resolvedLanguage !== 'English'
     ? `LANGUAGE: Write the post entirely in ${resolvedLanguage}. Use phrasing, idioms, and social media conventions natural to native ${resolvedLanguage} speakers.\n`
@@ -299,7 +415,7 @@ Platform: ${platform}
 Post angle / hook concept: "${angle}"
 
 Voice: ${voiceInstruction}
-${toneBlock}${visualBlock}
+${toneBlock}${visualBlock}${postPatternsBlock}
 Write ONE post draft that:
 - Feels native to ${platform} (format, length, tone)
 - Leads with the angle or hook
@@ -333,6 +449,7 @@ export async function generateMultiAccountDrafts({ angle, accounts, product, ide
         limits: platformLimits?.[account.platform] || null,
         visualDescriptors: visualDescriptors || [],
         language: account.resolvedLanguage || 'English',
+        postPatterns: account.postPatterns || null,
       }).then(draft => ({ accountId: account.id, draft, error: null }))
     )
   )
@@ -425,7 +542,7 @@ Respond with ONLY the image prompt text — no labels, no explanation.`
 /**
  * Regenerate a single account's draft.
  */
-export async function regenerateDraft({ angle, account, product, identity, postTone, practices, limits, visualDescriptors, language }) {
+export async function regenerateDraft({ angle, account, product, identity, postTone, practices, limits, visualDescriptors, language, postPatterns }) {
   if (!genAI) throw new Error('Gemini API not initialized. Please set your API key.')
   const draft = await generateDraft({
     angle,
@@ -438,6 +555,7 @@ export async function regenerateDraft({ angle, account, product, identity, postT
     limits: limits || null,
     visualDescriptors: visualDescriptors || [],
     language: language || 'English',
+    postPatterns: postPatterns || null,
   })
   return draft
 }

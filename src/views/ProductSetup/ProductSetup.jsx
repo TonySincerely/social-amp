@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { saveProduct, getProduct, getAllAccounts } from '../../services/storage'
+import { extractProductFromUrl } from '../../services/gemini'
 import { PlatformBadge } from '../../components/Icons'
 import { MOOD_PRESETS } from '../../data/visualPresets'
 import { LANGUAGES } from '../../data/languages'
@@ -39,6 +40,10 @@ export function ProductSetup() {
   const [warnings, setWarnings] = useState({})
   const [accounts, setAccounts] = useState([])
   const [saving, setSaving] = useState(false)
+  const [importUrl, setImportUrl] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState(null)
+  const [importedFrom, setImportedFrom] = useState(null)
 
   useEffect(() => {
     getAllAccounts().then(setAccounts)
@@ -130,6 +135,28 @@ export function ProductSetup() {
     setForm(prev => ({ ...prev, preferredColors: prev.preferredColors.filter((_, idx) => idx !== i) }))
   }
 
+  async function handleImport() {
+    let url = importUrl.trim()
+    if (!url) return
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url
+    try { new URL(url) } catch { setImportError('Enter a valid URL.'); return }
+    setImporting(true)
+    setImportError(null)
+    try {
+      const extracted = await extractProductFromUrl(url)
+      if (extracted.name) set('name', extracted.name)
+      if (extracted.problemStatement) set('problemStatement', extracted.problemStatement)
+      if (extracted.targetPersona) set('targetPersona', extracted.targetPersona)
+      if (extracted.ksp.length > 0) set('ksp', extracted.ksp)
+      const domain = new URL(url).hostname.replace(/^www\./, '')
+      setImportedFrom(domain)
+    } catch (e) {
+      setImportError(e.message || 'Could not extract product info from that URL.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   function validate() {
     const errs = {}
     const warns = {}
@@ -187,6 +214,54 @@ export function ProductSetup() {
       </div>
 
       <div className="ps-form">
+        {/* URL import — new products only */}
+        {!isEdit && (
+          <div className="ps-import-block">
+            {importedFrom ? (
+              <div className="ps-import-success">
+                <span>✓ Imported from {importedFrom} — review and adjust below.</span>
+                <button
+                  className="ps-import-clear"
+                  type="button"
+                  onClick={() => { setImportedFrom(null); setImportUrl('') }}
+                >
+                  Try different URL
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="ps-import-label">✦ Import from URL</div>
+                <div className="ps-import-row">
+                  <input
+                    type="url"
+                    className="ps-import-input"
+                    placeholder="Paste any public product page, landing page, or App Store listing…"
+                    value={importUrl}
+                    onChange={e => { setImportError(null); setImportUrl(e.target.value) }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleImport() } }}
+                    disabled={importing}
+                  />
+                  <button
+                    className="ps-import-btn"
+                    type="button"
+                    onClick={handleImport}
+                    disabled={!importUrl.trim() || importing}
+                  >
+                    {importing
+                      ? <><div className="spinner" style={{ width: 10, height: 10 }} /> Importing…</>
+                      : 'Import'
+                    }
+                  </button>
+                </div>
+                <div className="ps-import-hint">
+                  Extracts name, problem statement, persona, and KSPs. Review before saving.
+                </div>
+                {importError && <div className="ps-import-error">{importError}</div>}
+              </>
+            )}
+          </div>
+        )}
+
         {/* Product name */}
         <div className={`ps-field${errors.name ? ' ps-field-error' : ''}`}>
           <label className="ps-label">

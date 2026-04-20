@@ -127,9 +127,7 @@ RETURNS TABLE (
   minutes_old        NUMERIC,
   snapshot_count     BIGINT
 )
-LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  RETURN QUERY
+LANGUAGE sql SECURITY DEFINER AS $$
   WITH post_velocity AS (
     SELECT
       p.post_id,
@@ -162,11 +160,11 @@ BEGIN
        AND EXTRACT(EPOCH FROM (MAX(s.observed_at) - MIN(s.observed_at))) > 0
   ),
   sightings AS (
-    SELECT post_id,
-           ARRAY_AGG(scraper_user_id ORDER BY scraper_user_id) AS scrapers,
+    SELECT tps.post_id,
+           ARRAY_AGG(tps.scraper_user_id ORDER BY tps.scraper_user_id) AS scrapers,
            COUNT(*) AS scraper_count
-    FROM threads_post_scrapers
-    GROUP BY post_id
+    FROM threads_post_scrapers tps
+    GROUP BY tps.post_id
   )
   SELECT
     pv.post_id,
@@ -184,7 +182,6 @@ BEGIN
     ROUND(pv.like_delta   / NULLIF(pv.minutes_observed, 0), 2),
     ROUND(pv.reply_delta  / NULLIF(pv.minutes_observed, 0), 2),
     ROUND(pv.repost_delta / NULLIF(pv.minutes_observed, 0), 2),
-    -- Score boosted by scraper overlap: each extra scraper adds 50% weight
     ROUND(
       (pv.like_delta * 1.0 + pv.reply_delta * 2.0 + pv.repost_delta * 3.0)
       / NULLIF(pv.minutes_observed, 0)
@@ -201,7 +198,6 @@ BEGIN
       * (1 + (COALESCE(si.scraper_count, 1) - 1) * 0.5)
     , 2) DESC NULLS LAST
   LIMIT result_limit;
-END;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_velocity_leaderboard(INTEGER, INTEGER) TO anon;
@@ -241,16 +237,12 @@ RETURNS TABLE (
   reshare_count   INTEGER,
   total_count     BIGINT
 )
-LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE
-  v_offset INTEGER := (p_page - 1) * p_limit;
-BEGIN
-  RETURN QUERY
+LANGUAGE sql SECURITY DEFINER AS $$
   WITH sightings AS (
-    SELECT post_id,
-           ARRAY_AGG(scraper_user_id ORDER BY scraper_user_id) AS scrapers
-    FROM threads_post_scrapers
-    GROUP BY post_id
+    SELECT tps.post_id,
+           ARRAY_AGG(tps.scraper_user_id ORDER BY tps.scraper_user_id) AS scrapers
+    FROM threads_post_scrapers tps
+    GROUP BY tps.post_id
   ),
   filtered AS (
     SELECT
@@ -293,8 +285,7 @@ BEGIN
     CASE WHEN p_sort_by = 'posted' AND f.created_at > 0 THEN 0 ELSE 1 END ASC,
     CASE WHEN p_sort_by = 'posted' THEN f.created_at END DESC NULLS LAST,
     f.first_seen_at DESC
-  LIMIT p_limit OFFSET v_offset;
-END;
+  LIMIT p_limit OFFSET (p_page - 1) * p_limit;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_threads_posts(INTEGER, INTEGER, TEXT, INTEGER, INTEGER, BOOLEAN, TEXT, TEXT, TEXT[], TEXT[]) TO anon;

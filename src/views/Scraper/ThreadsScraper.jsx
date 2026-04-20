@@ -717,7 +717,10 @@ export function ThreadsScraper() {
                 <div className="sc-post-meta">
                   <span className="sc-post-author">@{post.author_username}</span>
                   <span className="sc-post-time">{post.created_at > 0 ? timeAgo(new Date(post.created_at * 1000).toISOString()) : timeAgo(post.first_seen_at)}</span>
-                  <span className="sc-post-scraped">scraped {formatScrapedAt(post.first_seen_at)}</span>
+                  <span className="sc-post-scraped">
+                    scraped {formatScrapedAt(post.first_seen_at)}
+                    {post.scraper_user_id && <span className="sc-post-scraper-id">{post.scraper_user_id}</span>}
+                  </span>
                 </div>
                 <p className="sc-post-text">{post.text || '[no text]'}</p>
                 <div className="sc-post-footer">
@@ -730,9 +733,6 @@ export function ThreadsScraper() {
                         {post.media_type === 'IMAGE' ? 'img' : post.media_type === 'VIDEO' ? 'vid' : 'carousel'}
                       </span>
                     )}
-                  {(post.scrapers ?? []).map(s => (
-                    <span key={s} className="sc-scraper-chip">{s}</span>
-                  ))}
                   </div>
                   {post.permalink && (
                     <a

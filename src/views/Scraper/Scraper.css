@@ -742,6 +742,16 @@
   color: var(--ink-3);
   font-family: var(--font-mono);
   margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.sc-post-scraper-id {
+  font-size: 10px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
 }
 
 .sc-media-badge {

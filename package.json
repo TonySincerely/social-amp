@@ -3,11 +3,17 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "workspaces": ["scraper"],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "scraper:server": "npm run server --workspace=scraper",
+    "scraper:start": "npm run start --workspace=scraper",
+    "scraper:login": "npm run login --workspace=scraper",
+    "scraper:install": "npm install --workspace=scraper",
+    "scraper:migrate": "npm run migrate --workspace=scraper"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -1,6 +1,6 @@
 # Social Amp
 
-An internal tool for validating product ideas through coordinated social media activity. AI-assisted content creation across multiple accounts — no OAuth, no live posting, all data stays local.
+An internal tool for validating product ideas through coordinated social media activity. AI-assisted content creation across multiple accounts — no OAuth, no live posting. Data stored in Supabase (cloud) and local SQLite (scraper).
 
 ## What it does
 
@@ -13,7 +13,138 @@ An internal tool for validating product ideas through coordinated social media a
 | **Calendar Planner** | `/planner` | Generate a full month of skeleton post slots based on best-practice frequency, optimal times, and platform-specific day distribution. |
 | **Calendar** | `/calendar` | Monthly grid of all posts. Draft slots (from planner) and ready posts (from studio) shown with distinct visual states. Click any date to open Quick Create pre-filled with that date. |
 | **Pulse** | `/pulse` | Daily trend and planning view. Upcoming cultural moments (next 6 weeks, region-aware) alongside live trend snapshots across Twitter, Reddit, Instagram, and the web. Star trends, send directly to Content Studio as an angle. |
+| **Scraper** | `/scraper` | Local Threads feed monitor. Scrapes your Threads home feed via Playwright, stores engagement snapshots in SQLite, calculates velocity to surface viral posts. Controlled from the browser (Start/Stop/Logs). Feed cards link directly to the post on Threads. Leaderboard cards send post text to Content Studio via "Post as →". Requires local API server — hidden/read-only when deployed. |
 | **Quick Create** | Sidebar `+ New Post` | Right-side overlay drawer. 4-step wizard to go from zero to a scheduled post without leaving the current view. |
+
+---
+
+## Monorepo structure
+
+```
+social-amp/
+├── src/                        # React web app (Vite)
+│   ├── components/             # Layout, Sidebar, Topbar, Icons, QuickCreateDrawer
+│   ├── context/                # AppContext — API key modal + quick create drawer
+│   ├── data/                   # upcomingEvents.js, visualPresets.js, languages.js
+│   ├── services/
+│   │   ├── gemini.js           # All Gemini API calls
+│   │   ├── storage.js          # Supabase CRUD (products, accounts, calendar, trends, platform configs)
+│   │   ├── threads.js          # Threads scraper API client (local server)
+│   │   └── planner.js          # Scheduling algorithm — no AI
+│   ├── styles/
+│   │   └── tokens.css          # Design tokens
+│   └── views/
+│       ├── ProductList/
+│       ├── ProductSetup/
+│       ├── AccountHub/
+│       ├── Playbook/
+│       ├── ContentStudio/
+│       ├── Planner/
+│       ├── Calendar/
+│       ├── Pulse/
+│       └── Scraper/            # ThreadsScraper.jsx — control bar, SSE logs, leaderboard, feed
+├── scraper/                    # Node.js scraper workspace (TypeScript)
+│   ├── src/
+│   │   ├── agent/
+│   │   │   ├── browser.ts      # Playwright launch, login, scrolling
+│   │   │   ├── parser.ts       # GraphQL counter-refresh parsing
+│   │   │   └── scraper.ts      # DOM scraping (primary), feed loop
+│   │   ├── storage/
+│   │   │   └── db.ts           # SQLite schema, upsert, snapshots (better-sqlite3)
+│   │   ├── analyzer/
+│   │   │   └── velocity.ts     # Engagement velocity calculation
+│   │   ├── cli/
+│   │   │   ├── login.ts        # One-time Threads login
+│   │   │   ├── start.ts        # Continuous scraping loop
+│   │   │   ├── test-scrape.ts  # One-shot test, no DB
+│   │   │   ├── test-scroll.ts  # Scroll + save test
+│   │   │   └── dump-raw.ts     # Raw DOM debug dump
+│   │   ├── config.ts           # Paths, URLs, timing constants
+│   │   └── server.ts           # Express API server — scraper control + data endpoints
+│   ├── package.json
+│   └── tsconfig.json
+├── package.json                # Workspace root — scripts for both packages
+└── .env.local                  # VITE_LOCAL_API_URL (gitignored — local only)
+```
+
+---
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 18+
+
+No native build tools required. The C++ dependency (`better-sqlite3`) has been replaced by Supabase — `npm install` compiles nothing.
+
+### Web app setup
+
+```bash
+cd social-amp
+npm install
+npm run dev       # http://localhost:5173
+```
+
+**`.env`** (committed — Supabase credentials):
+```
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+```
+
+**`.env.local`** (gitignored — enables scraper control bar in the UI):
+```
+VITE_LOCAL_API_URL=http://localhost:3001
+```
+
+Without `VITE_LOCAL_API_URL`, the Scraper view shows the feed and leaderboard (read from Supabase) but hides Start/Stop controls. The rest of the app is unaffected.
+
+Get a free Gemini API key at [aistudio.google.com](https://aistudio.google.com/app/apikey). Enter it via the settings icon (top right). Stored in LocalStorage.
+
+> **Image generation** requires a paid Gemini API plan. Draft generation and trend features work on the free tier.
+
+### Scraper setup (new machine — Mac or Windows)
+
+The scraper runs locally (Playwright browser with your Threads session) and writes data to the shared Supabase project. All teammates share the same feed and leaderboard.
+
+**Mac:**
+```bash
+cd scraper
+bash setup.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+cd scraper
+.\setup.ps1
+```
+
+Both scripts install dependencies, download the Playwright Chromium binary, and interactively create `scraper/.env`. On Windows, if the script is blocked by execution policy, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` first.
+
+**`scraper/.env`** (gitignored — one per machine):
+```
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_KEY=your-service-role-key
+SCRAPER_USER_ID=yourname
+```
+
+`SCRAPER_USER_ID` identifies which machine/person collected each post. Use a short, unique label (e.g. `tony`, `alice`). Posts from all scrapers are visible to everyone in the shared feed.
+
+**One-time Threads login** (saves session to `~/.threads-tracker/browser-profile/`):
+```bash
+npm run scraper:login
+```
+
+**Start the local API server** (required for Start/Stop/Logs in the UI):
+```bash
+npm run scraper:server   # Express server on http://localhost:3001
+```
+
+**CLI usage** (bypass the UI):
+```bash
+npm run scraper:start    # continuous loop, 5–15 min interval
+```
+
+---
 
 ## How it works
 
@@ -81,6 +212,9 @@ Both limits and strategy directives are placed at the **end** of the generation 
 **Arriving from Pulse:**
 - *Post as →* opens the studio with the trend topic pre-filled as the angle.
 
+**Arriving from Scraper:**
+- *Post as →* on any Leaderboard card opens the studio with the Threads post text pre-filled as the angle.
+
 ### Multi-language draft generation
 
 When an account has multiple language tags, Content Studio expands it into one draft slot per language. Slot keys follow the pattern `accountId::language`. Each slot generates a fully independent draft with a language directive injected near the bottom of the prompt:
@@ -122,7 +256,75 @@ Draft slots show as dashed amber chips on the calendar. Click to open the drawer
 3. **Star** any trend to bookmark it (stored in LocalStorage). **Post as →** sends the trend topic as a pre-filled angle to the Content Studio — an inline dropdown picks the product if you have more than one.
 4. Twitter and Instagram cards are labelled **search-derived** — they come from Google Search grounding rather than a live platform API.
 
-Snapshots are stored in IndexedDB and pruned automatically to the 5 most recent.
+Snapshots stored in Supabase (`trend_snapshots` table), pruned to 5 most recent on each save.
+
+### Scraper
+
+The Scraper module collects real engagement data from your Threads home feed using a local Playwright browser with your logged-in session. It runs entirely on your machine — no cloud scraping, no external APIs beyond Threads itself.
+
+**How it works:**
+1. Playwright opens a persistent Chromium profile (`~/.threads-tracker/browser-profile/`) where your Threads session is saved
+2. Scrapes `div[data-pressable-container='true']` containers for post text, author, timestamp, engagement counts, and media type
+3. Media type detected from DOM: `video` element → `VIDEO`; multiple non-profile `img` tags → `CAROUSEL`; one → `IMAGE`; text-only → `TEXT`
+4. Engagement buttons identified by SVG `aria-label` values (`讚`/`Like`, `回覆`/`Reply`, `轉發`/`Repost`, `分享`/`Share`)
+5. Posts and snapshots written to SQLite at `~/.threads-tracker/tracker.db`
+6. Velocity calculated as Δlikes ÷ Δtime between first and last snapshot
+
+**Scraper view (`/scraper → Threads tab`):**
+- **Control bar** — unified Start button (context-aware: `Start scraper` on home feed, `Start scraper: [keyword]` with a keyword active), frequency selector (`Once · 30m · 1h · 2h · 4h`, persisted in localStorage), Stop/Cancel loop, collapsible log panel (SSE stream from server stdout). Status dot: green pulse (running) / teal (loop countdown) / grey (idle). Status label shows countdown between runs: `Next run in 14m · "ai"`.
+- **Leaderboard tab** — posts ranked by **viral score** (composite velocity across likes, replies ×2, reposts ×3) over a 6h window. Requires ≥2 scrape cycles. Each card shows the score, absolute engagement counts, media type badge, age-band left border, and a **Go to →** link.
+- **Feed tab** — keyword bar at the top + posts with a filter/sort bar, pagination. Each card shows the post's published time, a `scraped [date time]` label, and a coloured left border indicating content age (green < 6h, amber 6–24h, orange 24–48h). Media type badges (`img` / `vid` / `carousel`) shown next to repost count when applicable. **Go to →** link opens the post on Threads in a new tab.
+- Control bar hidden when `VITE_LOCAL_API_URL` is not set (deployed mode)
+
+**Feed filters and sort:**
+- **Author** — free-text filter on handle
+- **Min likes** — numeric threshold
+- **Sort** — `Scraped` (default, ordered by when the post was collected) or `Posted` (ordered by publish time; posts with no timestamp fall back to scrape time and sort to the bottom)
+- **Time window** — `Live · 6h / 24h / 48h`, default 24h. Filters by published time when available, scrape time otherwise. "All time" and "7d" removed — posts older than 48h are past the Threads viral window and add noise.
+- **Media** — `All / Img / Vid / Carousel / Text` multi-select chips. `Text` includes posts with no detected media type.
+
+**Keyword search (Feed tab):**
+Type a keyword (e.g. `ai`, `政治`, `可愛`) in the `+ Add keyword…` input and press Enter to save it as a chip. Saved chips persist in localStorage (`threads_saved_keywords`). Chips are **view-only** — clicking switches which results you see without triggering a scrape. To scrape, select the keyword chip (making it active) then hit **Start scraper: [keyword]** in the control bar. A `last scraped X ago` label in the keyword bar shows data freshness. Click **Home feed** to return to untagged home feed posts.
+
+**Loop scheduling:**
+The frequency selector controls repeat behaviour. `Once` = one cycle then stop. Any other value (30m–4h) schedules the next run automatically after the current one completes, counting from run end. The loop target (home feed or keyword) is locked at Start time — switching keyword tabs mid-loop does not change what gets scraped. Stop cancels both the active run and any pending next cycle. `Cancel loop` appears in place of Start during the countdown between runs. The backend process always runs a single cycle when launched from the UI; the frontend owns all loop timing. Running `npm run scraper:start` directly (CLI) still uses the built-in continuous loop.
+
+**Local API server** (`scraper/src/server.ts`, port 3001):
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `GET` | `/api/threads/status` | `{ running, pid, keyword }` — `keyword` is non-null during a keyword scrape |
+| `POST` | `/api/threads/start` | spawn home feed scraper child process |
+| `POST` | `/api/threads/stop` | SIGTERM to child process |
+| `POST` | `/api/threads/search` | body `{ keyword }` — stops any running process, spawns one-shot keyword scrape |
+| `GET` | `/api/threads/stream` | SSE — scraper stdout/stderr, buffered last 200 lines |
+| `GET` | `/api/threads/posts` | paginated posts; no `keyword` param → home feed (`keyword IS NULL`); `keyword=ai` → that keyword's posts. Optional: `sortBy=scraped\|posted`, `mediaTypes=IMAGE,VIDEO,CAROUSEL,TEXT`, `timeWindow` (hours, filters by published time with scrape-time fallback) |
+| `GET` | `/api/threads/velocity` | viral score leaderboard — composite score (Δlikes×1 + Δreplies×2 + Δreposts×3) / minutes, 6h window, sorted by score desc. Params: `limit`, `maxAge` (minutes) |
+
+**Safety:**
+- Default 5–15 min random interval. Don't go below 3 min.
+- Keep `SCROLL_COUNT` at 3–8. High values increase detection risk.
+- Run during active hours only. Don't leave running overnight.
+- One instance only — never run two sessions against the same browser profile.
+- Read-only — never clicks, likes, replies, or posts.
+
+**Env overrides:**
+```bash
+SCROLL_COUNT=8 npm run scraper:start          # more posts per cycle
+MIN_INTERVAL=3 MAX_INTERVAL=8 npm run scraper:start  # faster polling
+```
+
+> **Do not use `HEADLESS=1`** — headless browsers are easier for Meta to detect.
+
+**Debugging:**
+If the feed shows 0 posts, check that extraction is working:
+```bash
+cd scraper && npx ts-node src/cli/test-scrape.ts
+```
+
+If post containers are found but counts are wrong, Threads may have changed button `aria-label` values — inspect `div[role="button"]` SVG labels in the page.
+
+---
 
 ## AI generation model
 
@@ -140,59 +342,29 @@ Every draft is shaped by layered instructions in this order (bottom = highest mo
 
 Constraints at positions 6–8 are placed last in the prompt to maximise adherence. Word limit is the most reliable length control — set it in Playbook Limits rather than relying on a strategy directive alone.
 
+---
+
 ## Tech stack
 
+**Web app:**
 - **React 19 + Vite 7** — React Router v7
 - **State** — React Context (`AppContext` — API key modal + quick create drawer) + component `useState`
-- **Storage** — IndexedDB via `idb` (v3: products, accounts, calendarPosts, trendSnapshots, platformConfigs) · LocalStorage (API key, timezone, pulse preferences)
-- **AI** — `@google/generative-ai` SDK — Gemini Flash / Pro with Google Search grounding for trend briefs and pulse snapshots; standard generation for drafts and strategy distillation; `gemini-2.5-flash-image` (Nano Banana) via direct `fetch` for post image generation
+- **Storage** — Supabase (products, accounts, calendar posts, trend snapshots, platform configs) · LocalStorage (API key, timezone, pulse starred/preferences)
+- **AI** — `@google/generative-ai` SDK — Gemini Flash / Pro with Google Search grounding for trend briefs and pulse snapshots; `gemini-2.5-flash-image` for post image generation
 - **Scheduling** — `src/services/planner.js` — pure JS, no AI calls
 - **Styling** — CSS custom properties (`src/styles/tokens.css`)
-- **Upcoming events** — `src/data/upcomingEvents.js` — static recurring calendar, region-aware, variable-date computation
 
-## Getting started
+**Scraper (`scraper/`):**
+- **Playwright** — persistent Chromium profile, DOM scraping
+- **better-sqlite3** — local SQLite for posts and engagement snapshots
+- **Express + CORS** — local API server, SSE for log streaming
+- **TypeScript + ts-node** — compiled via ts-node at runtime
 
-```bash
-npm install
-npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173).
-
-Get a free Gemini API key at [aistudio.google.com](https://aistudio.google.com/app/apikey). Click the settings icon (top right) to enter it. The key is stored in LocalStorage and only ever sent to Google's Gemini API.
-
-> **Image generation** requires a paid Gemini API plan. Draft generation and trend features work on the free tier.
-
-## Project structure
-
-```
-src/
-├── components/         # Layout, Sidebar, Topbar, Icons, ApiKeyModal, QuickCreateDrawer
-├── context/            # AppContext — API key modal state
-├── data/
-│   ├── upcomingEvents.js   # Static region-aware cultural calendar
-│   ├── visualPresets.js    # Mood/style preset chips for Content Studio
-│   └── languages.js        # Supported language list + short labels
-├── services/
-│   ├── gemini.js       # Trend brief, pulse snapshot, draft generation, strategy distillation, image generation
-│   ├── storage.js      # IndexedDB CRUD + platform config defaults
-│   └── planner.js      # Scheduling algorithm — best-practice day/time distribution
-├── styles/
-│   └── tokens.css      # Design tokens
-└── views/
-    ├── ProductList/    # Product dashboard with KSP pills
-    ├── ProductSetup/   # Brief form — name, problem, persona, KSPs, platforms, stage, goal, visual tones, languages
-    ├── AccountHub/     # Account + persona + language management
-    ├── Playbook/       # Platform limits + content strategy management
-    ├── ContentStudio/  # Draft generation, visual descriptors, image generation, multi-language slots, save to calendar
-    ├── Planner/        # 4-step scheduling flow
-    ├── Calendar/       # Monthly grid — draft and ready post states
-    └── Pulse/          # Upcoming events + live trend snapshots
-```
+---
 
 ## Data model
 
-All data is stored locally in IndexedDB under the `socialamp` database (v3).
+### Supabase (web app)
 
 **Products** — `{ id, name, problemStatement, targetPersona, ksp[], stage, platforms[], accountIds[], validationGoal, trendBrief, visualTones[], preferredColors[], languages[], createdAt, updatedAt }`
 
@@ -203,33 +375,75 @@ All data is stored locally in IndexedDB under the `socialamp` database (v3).
 
 **Accounts** — `{ id, handle, platform, followerCount, tonePreset, persona, languages[], topPostsRaw?, postPatterns[]?, createdAt, updatedAt }`
 
-- `languages[]` — per-account language override; if set, takes priority over the product's language list
-- `tonePreset` — default tone when no persona is set (educator, puncher, helper, jester, closer, storyteller, neutral)
-- `persona` — free text; when set, overrides all identity and tone instructions at generation time
-- `topPostsRaw` — optional; the raw pasted posts used to generate patterns (kept for re-distillation after edits)
-- `postPatterns[]` — optional; 5–8 behavioral writing directives distilled from `topPostsRaw`, injected into drafts as a voice modifier alongside persona
-
 **Calendar posts** — `{ id, productId, accountId, platform, accountHandle, copy, angle, identity, postTone, date, time, monthKey, scheduledOffset, status, language?, imageBase64?, imageMimeType?, imagePrompt?, createdAt, updatedAt }`
 
 `status` — `'draft'` for planner skeleton slots · `'ready'` for posts with written copy.
 
-`language` — optional; the language the post was written in (e.g. `'Traditional Chinese'`). Defaults to `'English'` when absent. Used to restore the correct slot when editing a post back in Content Studio.
-
-`time` — optional `HH:MM` string set when the post is saved from Quick Create or Content Studio with a time selected.
-
-`imageBase64` / `imageMimeType` / `imagePrompt` — optional; present when an image was generated for the post in Content Studio or Quick Create. When an account has multiple language slots, generating an image for any one slot copies it to all sibling slots for that account.
-
-**Trend snapshots** — `{ id, location, region, fetchedAt, trends[], upcomingBuzz[], createdAt }`
-
-Pruned to 5 most recent on each save.
+**Trend snapshots** — `{ id, location, region, fetchedAt, trends[], upcomingBuzz[], createdAt }` — pruned to 5 most recent.
 
 **Platform configs** — `{ platform, limits: { charLimit, wordLimit, hashtagLimit, linkInPost, videoMaxSec }, strategies[], selectedStrategyId, updatedAt }`
 
-`strategies[]` — `{ id, name, content, directives[], distilledAt, createdAt }` — `directives` is the AI-extracted list injected into prompts; `content` is the raw source document kept for editing.
+### Supabase — threads tables
+
+**threads_posts** — one row per unique Threads post
+
+| Column | Notes |
+|--------|-------|
+| `post_id` | short code from post URL (PK) |
+| `author_username` | @handle |
+| `text` | post content |
+| `permalink` | full URL |
+| `created_at` | Unix timestamp from `<time datetime>` on Threads |
+| `first_seen_at` | timestamp of first observation (immutable via DB trigger) |
+| `scraper_user_id` | which team member's scraper collected this post |
+| `keyword` | search keyword that produced this post; `NULL` for home feed posts |
+| `media_type` | `TEXT / IMAGE / VIDEO / CAROUSEL` — detected from DOM |
+| `like_count`, `reply_count`, `repost_count`, `reshare_count` | latest counts (updated on each scrape) |
+
+**threads_snapshots** — one row per engagement observation per post (used for velocity)
+
+| Column | Notes |
+|--------|-------|
+| `post_id` | FK → threads_posts |
+| `observed_at` | timestamp of this observation |
+| `like_count`, `reply_count`, `repost_count`, `reshare_count` | counts at observation time |
+
+Velocity and feed queries are served via Postgres RPC functions (`get_velocity_leaderboard`, `get_threads_posts`) — see `supabase/migrations/001_threads_tables.sql`.
+
+---
+
+## Current status
+
+**Working as of 2026-04-20.**
+
+- Scraper login, post extraction, engagement counts, Supabase persistence — functional
+- Scraper control from browser UI (Start/Stop/Logs via SSE) — functional
+- Feed and leaderboard tabs — functional (data served from Supabase, visible when deployed)
+- Feed cards: published time + `scraped [date time]` label; media type badges; age-band left border (green < 6h, amber 6–24h, orange 24–48h); "Go to →" link — functional
+- Feed sort by scraped time or published time — functional
+- Feed media type filter (All / Img / Vid / Carousel / Text, multi-select) — functional
+- Feed time window (Live · 6h / 24h / 48h, default 24h) filters by published time with scrape-time fallback — functional
+- Leaderboard viral score: composite velocity (Δlikes×1 + Δreplies×2 + Δreposts×3) / minutes, 6h window — computed via Supabase RPC
+- Multi-scraper support: multiple team members can run the scraper locally; all data merges into the shared Supabase project tagged by `scraper_user_id`
+- Existing SQLite data migrated via `npm run scraper:migrate`
+- All existing social-amp modules unchanged
+
+**Known Windows-specific notes:**
+- Scraper must be spawned with `stdio: ['inherit', 'pipe', 'pipe']` — Chrome exits with code 21 if stdin handle is `INVALID_HANDLE_VALUE`
+- ts-node is invoked via `process.execPath` + `ts-node/dist/bin.js` directly (no shell layer) — avoids Playwright pipe handle inheritance issues with `shell: true`
+
+---
+
+## What's next
+
+- **Topbar title** — add `'/scraper': 'Scraper'` to the `pageTitles` map in `src/components/Topbar.jsx`
+- **Additional scraper tabs** — Scraper view is tab-structured for future platforms (Instagram, X, etc.)
+
+---
 
 ## Privacy
 
-All data is stored in your browser. Nothing is synced to a server. Gemini API calls send prompt text to Google's API — see [Google's privacy policy](https://policies.google.com/privacy).
+Supabase data (including scraped Threads posts) is synced to your Supabase project. Gemini API calls send prompt text to Google's API — see [Google's privacy policy](https://policies.google.com/privacy).
 
 ## Out of scope — Phase 1
 

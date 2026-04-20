@@ -8,6 +8,7 @@ const pageTitles = {
   '/planner': 'Calendar Planner',
   '/pulse': 'Pulse',
   '/playbook': 'Playbook',
+  '/scraper': 'Scraper',
 }
 
 export function Topbar() {

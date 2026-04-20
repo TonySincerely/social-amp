@@ -138,6 +138,19 @@ export function PulseIcon({ size = 16 }) {
   )
 }
 
+export function ScraperIcon({ size = 16 }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width={size} height={size}>
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <polyline points="8 21 12 17 16 21" />
+      <line x1="6" y1="8" x2="6" y2="8.01" />
+      <line x1="10" y1="8" x2="18" y2="8" />
+      <line x1="6" y1="12" x2="6" y2="12.01" />
+      <line x1="10" y1="12" x2="18" y2="12" />
+    </svg>
+  )
+}
+
 // Platform icons as colored badges
 export function PlatformBadge({ platform, size = 14 }) {
   const map = {

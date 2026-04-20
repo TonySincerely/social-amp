@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import { Layout } from './components'
-import { ProductList, ProductSetup, AccountHub, ContentStudio, Calendar, Planner, Pulse, Playbook } from './views'
+import { ProductList, ProductSetup, AccountHub, ContentStudio, Calendar, Planner, Pulse, Playbook, Scraper } from './views'
 import { Login } from './views/Login/Login'
 
 function App() {
@@ -20,6 +20,7 @@ function App() {
           <Route path="planner" element={<Planner />} />
           <Route path="pulse" element={<Pulse />} />
           <Route path="playbook" element={<Playbook />} />
+          <Route path="scraper" element={<Scraper />} />
         </Route>
       </Routes>
     </AppProvider>

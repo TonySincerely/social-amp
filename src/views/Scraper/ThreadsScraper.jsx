@@ -16,6 +16,7 @@ const TIME_WINDOWS = [
   { label: 'Live · 6h', value: 6 },
   { label: '24h', value: 24 },
   { label: '48h', value: 48 },
+  { label: 'All', value: 0 },
 ]
 
 const MEDIA_TYPES = [
@@ -653,7 +654,7 @@ export function ThreadsScraper() {
           {!loading && filteredOutCount > 0 && posts.length > 0 && (
             <div className="sc-filtered-banner">
               {filteredOutCount} older post{filteredOutCount !== 1 ? 's' : ''} hidden by the {filters.timeWindow}h window —{' '}
-              <button className="sc-filtered-link" onClick={() => applyFilters({ ...filters, timeWindow: 48 })}>switch to 48h</button>
+              <button className="sc-filtered-link" onClick={() => applyFilters({ ...filters, timeWindow: 0 })}>show all</button>
             </div>
           )}
 
@@ -663,7 +664,7 @@ export function ThreadsScraper() {
               {filteredOutCount > 0 ? (
                 <p className="sc-empty-hint">
                   {filteredOutCount} post{filteredOutCount !== 1 ? 's' : ''} saved but outside the {filters.timeWindow}h window —{' '}
-                  <button className="sc-filtered-link" onClick={() => applyFilters({ ...filters, timeWindow: 48 })}>switch to 48h</button>
+                  <button className="sc-filtered-link" onClick={() => applyFilters({ ...filters, timeWindow: 0 })}>show all</button>
                 </p>
               ) : (
                 !status.running && <p className="sc-empty-hint">Start the scraper to collect posts.</p>

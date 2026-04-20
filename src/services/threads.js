@@ -1,8 +1,19 @@
 import { supabase } from '../lib/supabase'
 
-const LOCAL = import.meta.env.VITE_LOCAL_API_URL ?? ''
+// When VITE_LOCAL_API_URL is set (local dev), use it. Otherwise fall back to the
+// default port so the deployed app can still reach a locally running scraper server.
+const LOCAL = import.meta.env.VITE_LOCAL_API_URL ?? 'http://localhost:3001'
 
-export const isLocalAvailable = () => Boolean(import.meta.env.VITE_LOCAL_API_URL)
+// Runtime probe — works from any origin, including the deployed Vercel app.
+// Returns true if the local scraper server is reachable.
+export async function probeLocalServer() {
+  try {
+    const res = await fetch(`${LOCAL}/api/threads/status`, { signal: AbortSignal.timeout(1500) })
+    return res.ok
+  } catch {
+    return false
+  }
+}
 
 // ─── Scraper process control (local API only) ──────────────────────────────
 

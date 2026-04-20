@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  isLocalAvailable,
+  probeLocalServer,
   getScraperStatus,
   startScraper,
   stopScraper,
@@ -94,8 +94,8 @@ function formatCountdown(seconds) {
 
 export function ThreadsScraper() {
   const navigate = useNavigate()
-  const localAvailable = isLocalAvailable()
 
+  const [localAvailable, setLocalAvailable] = useState(null) // null=probing, true=found, false=not found
   const [serverReachable, setServerReachable] = useState(null)
   const [status, setStatus] = useState({ running: false, pid: null, keyword: null })
   const [innerTab, setInnerTab] = useState('leaderboard')
@@ -179,9 +179,14 @@ export function ThreadsScraper() {
     finally { setLoading(false) }
   }, [page, filters, activeKeyword])
 
-  // Initial load
+  // Probe for local server on mount
   useEffect(() => {
-    if (!localAvailable) return
+    probeLocalServer().then(setLocalAvailable)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Initial load once probe resolves to true
+  useEffect(() => {
+    if (localAvailable !== true) return
     getAllProducts().then(setProducts).catch(() => {})
     fetchStatus().then(s => {
       if (s) {
@@ -189,7 +194,7 @@ export function ThreadsScraper() {
         fetchPosts(1, filters)
       }
     })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [localAvailable]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Polling while running
   useEffect(() => {
@@ -353,14 +358,17 @@ export function ThreadsScraper() {
     setOpenPicker(prev => prev === post.post_id ? null : post.post_id)
   }
 
-  if (!localAvailable) {
+  if (localAvailable === null) {
+    return <div className="sc-checking">Checking for local server…</div>
+  }
+
+  if (localAvailable === false) {
     return (
       <div className="sc-offline">
         <div className="sc-offline-icon">⚙</div>
         <h3>Local server not connected</h3>
         <p>The Scraper runs locally on your machine. Start the API server to use this module.</p>
         <code>npm run scraper:server</code>
-        <p className="sc-offline-hint">Then set <code>VITE_LOCAL_API_URL=http://localhost:3001</code> in your <code>.env.local</code></p>
       </div>
     )
   }

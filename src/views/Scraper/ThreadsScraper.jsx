@@ -108,6 +108,7 @@ export function ThreadsScraper() {
   const [logsOpen, setLogsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
+  const [filteredOutCount, setFilteredOutCount] = useState(0)
   const [products, setProducts] = useState([])
   const [openPicker, setOpenPicker] = useState(null)
 
@@ -163,18 +164,15 @@ export function ThreadsScraper() {
   const fetchPosts = useCallback(async (p = page, f = filters, kw = activeKeyword) => {
     try {
       setLoading(true)
-      const data = await getThreadsPosts({
-        page: p,
-        limit: LIMIT,
-        author: f.author,
-        minLikes: f.minLikes,
-        timeWindow: f.timeWindow,
-        keyword: kw,
-        sortBy: f.sortBy,
-        mediaTypes: f.mediaTypes,
-      })
+      const [data, unfiltered] = await Promise.all([
+        getThreadsPosts({ page: p, limit: LIMIT, author: f.author, minLikes: f.minLikes, timeWindow: f.timeWindow, keyword: kw, sortBy: f.sortBy, mediaTypes: f.mediaTypes }),
+        f.timeWindow > 0
+          ? getThreadsPosts({ page: 1, limit: 1, author: f.author, keyword: kw, mediaTypes: f.mediaTypes })
+          : Promise.resolve(null),
+      ])
       setPosts(data.posts)
       setTotal(data.total)
+      setFilteredOutCount(unfiltered ? Math.max(0, unfiltered.total - data.total) : 0)
     } catch { /* server not running */ }
     finally { setLoading(false) }
   }, [page, filters, activeKeyword])
@@ -652,10 +650,24 @@ export function ThreadsScraper() {
             </div>
           )}
 
+          {!loading && filteredOutCount > 0 && posts.length > 0 && (
+            <div className="sc-filtered-banner">
+              {filteredOutCount} older post{filteredOutCount !== 1 ? 's' : ''} hidden by the {filters.timeWindow}h window —{' '}
+              <button className="sc-filtered-link" onClick={() => applyFilters({ ...filters, timeWindow: 48 })}>switch to 48h</button>
+            </div>
+          )}
+
           {!loading && posts.length === 0 && (
             <div className="sc-empty">
               <p>No posts found.</p>
-              {!status.running && <p className="sc-empty-hint">Start the scraper to collect posts.</p>}
+              {filteredOutCount > 0 ? (
+                <p className="sc-empty-hint">
+                  {filteredOutCount} post{filteredOutCount !== 1 ? 's' : ''} saved but outside the {filters.timeWindow}h window —{' '}
+                  <button className="sc-filtered-link" onClick={() => applyFilters({ ...filters, timeWindow: 48 })}>switch to 48h</button>
+                </p>
+              ) : (
+                !status.running && <p className="sc-empty-hint">Start the scraper to collect posts.</p>
+              )}
             </div>
           )}
 

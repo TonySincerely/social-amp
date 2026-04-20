@@ -228,10 +228,8 @@ BEGIN
       -- time window: use published time when available, scrape time otherwise
       AND (
         p_time_window_hours = 0
-        OR GREATEST(
-             CASE WHEN p.created_at > 0 THEN TO_TIMESTAMP(p.created_at) ELSE NULL END,
-             p.first_seen_at
-           ) > NOW() - (p_time_window_hours || ' hours')::INTERVAL
+        OR (p.created_at > 0 AND TO_TIMESTAMP(p.created_at) > NOW() - (p_time_window_hours || ' hours')::INTERVAL)
+        OR (p.created_at = 0 AND p.first_seen_at            > NOW() - (p_time_window_hours || ' hours')::INTERVAL)
       )
       -- media type: TEXT filter also matches NULL media_type
       AND (

@@ -106,6 +106,23 @@ Get a free Gemini API key at [aistudio.google.com](https://aistudio.google.com/a
 
 The scraper runs locally (Playwright browser with your Threads session) and writes data to the shared Supabase project. All teammates share the same feed and leaderboard.
 
+#### Option A — Installer (non-technical teammates)
+
+Create a zip containing `install-mac.command`, `install-windows.bat`, `install-windows.ps1`, and the `scraper/` folder. Share via Google Drive or USB. See `SCRAPER_SETUP.md` for the user-facing guide.
+
+**Important when zipping:** create the zip on Mac (or a tool that preserves Unix permissions) so `install-mac.command` keeps its execute bit and LF line endings.
+
+- **Mac:** double-click `install-mac.command` (right-click → Open if Gatekeeper blocks it)
+- **Windows:** double-click `install-windows.bat` (More info → Run anyway if SmartScreen warns)
+
+Both installers: check Node.js, run `npm install`, download Playwright Chromium, prompt for `scraper/.env` credentials, open a browser for Threads login, and drop a **"Start Scraper"** shortcut on the Desktop.
+
+**Daily use after install:** double-click "Start Scraper" on Desktop → keep that window open → open the Vercel app → Scraper controls appear automatically.
+
+**Do not move the extracted folder** after setup — the desktop launcher hardcodes the path.
+
+#### Option B — Manual setup (developers)
+
 **Mac:**
 ```bash
 cd scraper
@@ -422,7 +439,7 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 
 ## Current status
 
-**Working as of 2026-04-20.**
+**Working as of 2026-04-21.**
 
 - Scraper login, post extraction, engagement counts, Supabase persistence — functional
 - Scraper control from browser UI (Start/Stop/Logs via SSE) — functional
@@ -440,6 +457,7 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 - Scraper attribution: each post tagged with `scraper_user_id`; sightings tracked in `threads_post_scrapers` junction table
 - Multi-scraper support: multiple team members scrape from their own Threads accounts; all data merges into the shared Supabase project
 - Existing SQLite data migrated via `npm run scraper:migrate`
+- Installer scripts for non-technical teammates — `install-mac.command` / `install-windows.bat` + `install-windows.ps1`; creates a "Start Scraper" desktop shortcut; user-facing guide in `SCRAPER_SETUP.md`
 
 **Known Windows-specific notes:**
 - Scraper must be spawned with `stdio: ['inherit', 'pipe', 'pipe']` — Chrome exits with code 21 if stdin handle is `INVALID_HANDLE_VALUE`

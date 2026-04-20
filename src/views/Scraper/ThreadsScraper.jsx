@@ -178,7 +178,7 @@ export function ThreadsScraper() {
       // Collect unique scrapers seen across current page for the filter row
       const seen = [...new Set(data.posts.flatMap(p => p.scrapers ?? []).filter(Boolean))].sort()
       setAvailableScrapers(prev => [...new Set([...prev, ...seen])].sort())
-    } catch { /* server not running */ }
+    } catch (err) { console.error('fetchPosts error:', err) }
     finally { setLoading(false) }
   }, [page, filters, activeKeyword])
 

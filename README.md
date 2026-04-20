@@ -408,7 +408,15 @@ Constraints at positions 6–8 are placed last in the prompt to maximise adheren
 | `observed_at` | timestamp of this observation |
 | `like_count`, `reply_count`, `repost_count`, `reshare_count` | counts at observation time |
 
-Velocity and feed queries are served via Postgres RPC functions (`get_velocity_leaderboard`, `get_threads_posts`) — see `supabase/migrations/001_threads_tables.sql`.
+**threads_post_scrapers** — which scrapers have seen each post (junction table)
+
+| Column | Notes |
+|--------|-------|
+| `post_id` | FK → threads_posts (composite PK) |
+| `scraper_user_id` | which scraper saw this post (composite PK) |
+| `first_seen_at` | when this scraper first observed the post |
+
+Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC functions (`get_velocity_leaderboard`, `get_threads_posts`) — see `supabase/migrations/001_threads_tables.sql`.
 
 ---
 
@@ -418,15 +426,20 @@ Velocity and feed queries are served via Postgres RPC functions (`get_velocity_l
 
 - Scraper login, post extraction, engagement counts, Supabase persistence — functional
 - Scraper control from browser UI (Start/Stop/Logs via SSE) — functional
-- Feed and leaderboard tabs — functional (data served from Supabase, visible when deployed)
-- Feed cards: published time + `scraped [date time]` label; media type badges; age-band left border (green < 6h, amber 6–24h, orange 24–48h); "Go to →" link — functional
+- Feed and leaderboard tabs — functional (data served from Supabase, visible when deployed and locally)
+- Local server detected at runtime — control bar appears automatically when `npm run scraper:server` is running, even on the deployed Vercel app; no `.env.local` required
+- Feed cards: published time + `scraped [date time]` + scraper user ID label; media type badges; age-band left border — functional
 - Feed sort by scraped time or published time — functional
 - Feed media type filter (All / Img / Vid / Carousel / Text, multi-select) — functional
-- Feed time window (Live · 6h / 24h / 48h, default 24h) filters by published time with scrape-time fallback — functional
+- Feed time window (Live · 6h / 24h / 48h / All) — filters by published time with scrape-time fallback; "All" shows every saved post regardless of age — functional
+- Feed shows count of posts hidden by the active time window with a one-click "show all" link — functional
+- Feed scraper filter row — populated dynamically from scrapers in current results; multi-select chips — functional
 - Leaderboard viral score: composite velocity (Δlikes×1 + Δreplies×2 + Δreposts×3) / minutes, 6h window — computed via Supabase RPC
-- Multi-scraper support: multiple team members can run the scraper locally; all data merges into the shared Supabase project tagged by `scraper_user_id`
+- Cross-bubble score boost: leaderboard score multiplied by `1 + (scraper_count − 1) × 0.5` — posts seen by multiple scrapers rank higher
+- Leaderboard cards show "seen by N scrapers" badge + amber left border when scraper_count > 1 — functional
+- Scraper attribution: each post tagged with `scraper_user_id`; sightings tracked in `threads_post_scrapers` junction table
+- Multi-scraper support: multiple team members scrape from their own Threads accounts; all data merges into the shared Supabase project
 - Existing SQLite data migrated via `npm run scraper:migrate`
-- All existing social-amp modules unchanged
 
 **Known Windows-specific notes:**
 - Scraper must be spawned with `stdio: ['inherit', 'pipe', 'pipe']` — Chrome exits with code 21 if stdin handle is `INVALID_HANDLE_VALUE`

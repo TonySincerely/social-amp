@@ -104,7 +104,8 @@ export function ThreadsScraper() {
   const [posts, setPosts] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [filters, setFilters] = useState({ author: '', minLikes: 0, timeWindow: 24, sortBy: 'scraped', mediaTypes: [] })
+  const [filters, setFilters] = useState({ author: '', minLikes: 0, timeWindow: 24, sortBy: 'scraped', mediaTypes: [], scraperIds: [] })
+  const [availableScrapers, setAvailableScrapers] = useState([])
   const [logs, setLogs] = useState([])
   const [logsOpen, setLogsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -166,14 +167,17 @@ export function ThreadsScraper() {
     try {
       setLoading(true)
       const [data, unfiltered] = await Promise.all([
-        getThreadsPosts({ page: p, limit: LIMIT, author: f.author, minLikes: f.minLikes, timeWindow: f.timeWindow, keyword: kw, sortBy: f.sortBy, mediaTypes: f.mediaTypes }),
+        getThreadsPosts({ page: p, limit: LIMIT, author: f.author, minLikes: f.minLikes, timeWindow: f.timeWindow, keyword: kw, sortBy: f.sortBy, mediaTypes: f.mediaTypes, scraperIds: f.scraperIds }),
         f.timeWindow > 0
-          ? getThreadsPosts({ page: 1, limit: 1, author: f.author, keyword: kw, mediaTypes: f.mediaTypes })
+          ? getThreadsPosts({ page: 1, limit: 1, author: f.author, keyword: kw, mediaTypes: f.mediaTypes, scraperIds: f.scraperIds })
           : Promise.resolve(null),
       ])
       setPosts(data.posts)
       setTotal(data.total)
       setFilteredOutCount(unfiltered ? Math.max(0, unfiltered.total - data.total) : 0)
+      // Collect unique scrapers seen across current page for the filter row
+      const seen = [...new Set(data.posts.flatMap(p => p.scrapers ?? []).filter(Boolean))].sort()
+      setAvailableScrapers(prev => [...new Set([...prev, ...seen])].sort())
     } catch { /* server not running */ }
     finally { setLoading(false) }
   }, [page, filters, activeKeyword])
@@ -480,7 +484,7 @@ export function ThreadsScraper() {
               </p>
               <div className="sc-lb-list">
               {velocity.map((v, i) => (
-                <div key={v.post_id} className={`sc-lb-card ${velocityAgeClass(v)}`}>
+                <div key={v.post_id} className={`sc-lb-card ${velocityAgeClass(v)}${v.scraper_count > 1 ? ' sc-lb-card-crossbubble' : ''}`}>
                   <span className="sc-lb-rank">#{i + 1}</span>
                   <div className="sc-lb-body">
                     <div className="sc-lb-meta">
@@ -491,6 +495,11 @@ export function ThreadsScraper() {
                           {v.media_type === 'IMAGE' ? 'img' : v.media_type === 'VIDEO' ? 'vid' : 'carousel'}
                         </span>
                       )}
+                      {v.scraper_count > 1 && (
+                        <span className="sc-crossbubble-badge">
+                          seen by {v.scraper_count} scrapers
+                        </span>
+                      )}
                     </div>
                     <p className="sc-lb-text">{v.text ? v.text.slice(0, 140) + (v.text.length > 140 ? '…' : '') : '[no text]'}</p>
                     <div className="sc-lb-stats">
@@ -499,6 +508,9 @@ export function ThreadsScraper() {
                       <span className="sc-stat">{formatCount(v.current_replies)} replies</span>
                       <span className="sc-stat">{formatCount(v.current_reposts)} reposts</span>
                       <span className="sc-stat">{v.snapshot_count} snapshots</span>
+                      {(v.scrapers ?? []).map(s => (
+                        <span key={s} className="sc-scraper-chip">{s}</span>
+                      ))}
                     </div>
                   </div>
                   <div className="sc-lb-actions">
@@ -636,6 +648,33 @@ export function ThreadsScraper() {
                 ))}
               </div>
             </div>
+            {availableScrapers.length > 0 && (
+              <div className="sc-filter-group">
+                <span className="sc-filter-label">Scrapers</span>
+                <div className="sc-filter-chips">
+                  <button
+                    className={`sc-chip${filters.scraperIds.length === 0 ? ' sc-chip-active' : ''}`}
+                    onClick={() => applyFilters({ ...filters, scraperIds: [] })}
+                  >
+                    All
+                  </button>
+                  {availableScrapers.map(id => (
+                    <button
+                      key={id}
+                      className={`sc-chip${filters.scraperIds.includes(id) ? ' sc-chip-active' : ''}`}
+                      onClick={() => {
+                        const next = filters.scraperIds.includes(id)
+                          ? filters.scraperIds.filter(s => s !== id)
+                          : [...filters.scraperIds, id]
+                        applyFilters({ ...filters, scraperIds: next })
+                      }}
+                    >
+                      {id}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {status.running && (
@@ -691,6 +730,9 @@ export function ThreadsScraper() {
                         {post.media_type === 'IMAGE' ? 'img' : post.media_type === 'VIDEO' ? 'vid' : 'carousel'}
                       </span>
                     )}
+                  {(post.scrapers ?? []).map(s => (
+                    <span key={s} className="sc-scraper-chip">{s}</span>
+                  ))}
                   </div>
                   {post.permalink && (
                     <a

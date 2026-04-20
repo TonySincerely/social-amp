@@ -769,6 +769,32 @@
   color: #92400e;
 }
 
+/* Scraper attribution chips — post cards and leaderboard */
+.sc-scraper-chip {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-3, #ece9e2);
+  color: var(--ink-2);
+  letter-spacing: 0.01em;
+}
+
+/* Cross-bubble leaderboard card — amber left border */
+.sc-lb-card-crossbubble {
+  border-left-color: #f59e0b !important;
+}
+
+.sc-crossbubble-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .sc-post-text {
   font-size: 13px;
   color: var(--ink-2);

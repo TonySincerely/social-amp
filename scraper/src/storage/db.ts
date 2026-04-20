@@ -57,6 +57,17 @@ export async function savePosts(
 
   if (error) throw new Error(`savePosts: ${error.message}`);
 
+  // Record sighting — one row per (post, scraper); safe to upsert every cycle
+  const sightings = rows.map(r => ({
+    post_id:         r.post_id,
+    scraper_user_id: SCRAPER_USER_ID,
+    first_seen_at:   r.first_seen_at,
+  }));
+  const { error: sErr } = await getClient()
+    .from('threads_post_scrapers')
+    .upsert(sightings, { onConflict: 'post_id,scraper_user_id', ignoreDuplicates: true });
+  if (sErr) throw new Error(`saveSightings: ${sErr.message}`);
+
   // Insert initial snapshots for this cycle
   const snapshots: EngagementSnapshot[] = posts.map(p => ({
     post_id:       p.post_id,

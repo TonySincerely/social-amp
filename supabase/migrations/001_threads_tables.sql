@@ -62,6 +62,20 @@ CREATE POLICY "anon_select_threads_snapshots"
 
 -- Service role bypasses RLS by default — scraper writes use the service key.
 
+-- threads_post_scrapers: which scrapers have seen each post (junction table)
+CREATE TABLE IF NOT EXISTS threads_post_scrapers (
+  post_id         TEXT NOT NULL REFERENCES threads_posts(post_id),
+  scraper_user_id TEXT NOT NULL,
+  first_seen_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (post_id, scraper_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tps_scraper ON threads_post_scrapers(scraper_user_id);
+
+ALTER TABLE threads_post_scrapers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "anon_select_threads_post_scrapers"
+  ON threads_post_scrapers FOR SELECT TO anon USING (true);
+
 -- ============================================================
 -- Immutability trigger
 -- Prevents upserts from overwriting first_seen_at and scraper_user_id.
@@ -101,6 +115,8 @@ RETURNS TABLE (
   created_at         BIGINT,
   media_type         TEXT,
   scraper_user_id    TEXT,
+  scrapers           TEXT[],
+  scraper_count      BIGINT,
   current_likes      INTEGER,
   current_replies    INTEGER,
   current_reposts    INTEGER,
@@ -144,6 +160,13 @@ BEGIN
              p.created_at, p.media_type, p.scraper_user_id
     HAVING COUNT(s.id) >= 2
        AND EXTRACT(EPOCH FROM (MAX(s.observed_at) - MIN(s.observed_at))) > 0
+  ),
+  sightings AS (
+    SELECT post_id,
+           ARRAY_AGG(scraper_user_id ORDER BY scraper_user_id) AS scrapers,
+           COUNT(*) AS scraper_count
+    FROM threads_post_scrapers
+    GROUP BY post_id
   )
   SELECT
     pv.post_id,
@@ -153,20 +176,30 @@ BEGIN
     pv.created_at,
     pv.media_type,
     pv.scraper_user_id,
+    COALESCE(si.scrapers, ARRAY[pv.scraper_user_id]),
+    COALESCE(si.scraper_count, 1),
     pv.current_likes::INTEGER,
     pv.current_replies::INTEGER,
     pv.current_reposts::INTEGER,
     ROUND(pv.like_delta   / NULLIF(pv.minutes_observed, 0), 2),
     ROUND(pv.reply_delta  / NULLIF(pv.minutes_observed, 0), 2),
     ROUND(pv.repost_delta / NULLIF(pv.minutes_observed, 0), 2),
-    ROUND((pv.like_delta * 1.0 + pv.reply_delta * 2.0 + pv.repost_delta * 3.0)
-          / NULLIF(pv.minutes_observed, 0), 2),
+    -- Score boosted by scraper overlap: each extra scraper adds 50% weight
+    ROUND(
+      (pv.like_delta * 1.0 + pv.reply_delta * 2.0 + pv.repost_delta * 3.0)
+      / NULLIF(pv.minutes_observed, 0)
+      * (1 + (COALESCE(si.scraper_count, 1) - 1) * 0.5)
+    , 2),
     pv.minutes_old,
     pv.snapshot_count
   FROM post_velocity pv
+  LEFT JOIN sightings si ON si.post_id = pv.post_id
   ORDER BY
-    ROUND((pv.like_delta * 1.0 + pv.reply_delta * 2.0 + pv.repost_delta * 3.0)
-          / NULLIF(pv.minutes_observed, 0), 2) DESC NULLS LAST
+    ROUND(
+      (pv.like_delta * 1.0 + pv.reply_delta * 2.0 + pv.repost_delta * 3.0)
+      / NULLIF(pv.minutes_observed, 0)
+      * (1 + (COALESCE(si.scraper_count, 1) - 1) * 0.5)
+    , 2) DESC NULLS LAST
   LIMIT result_limit;
 END;
 $$;
@@ -189,7 +222,8 @@ CREATE OR REPLACE FUNCTION get_threads_posts(
   p_has_keyword       BOOLEAN DEFAULT FALSE,
   p_keyword           TEXT    DEFAULT NULL,
   p_sort_by           TEXT    DEFAULT 'scraped',
-  p_media_types       TEXT[]  DEFAULT NULL
+  p_media_types       TEXT[]  DEFAULT NULL,
+  p_scraper_ids       TEXT[]  DEFAULT NULL
 )
 RETURNS TABLE (
   post_id         TEXT,
@@ -200,6 +234,7 @@ RETURNS TABLE (
   first_seen_at   TIMESTAMPTZ,
   media_type      TEXT,
   scraper_user_id TEXT,
+  scrapers        TEXT[],
   like_count      INTEGER,
   reply_count     INTEGER,
   repost_count    INTEGER,
@@ -211,41 +246,50 @@ DECLARE
   v_offset INTEGER := (p_page - 1) * p_limit;
 BEGIN
   RETURN QUERY
-  WITH filtered AS (
+  WITH sightings AS (
+    SELECT post_id,
+           ARRAY_AGG(scraper_user_id ORDER BY scraper_user_id) AS scrapers
+    FROM threads_post_scrapers
+    GROUP BY post_id
+  ),
+  filtered AS (
     SELECT
       p.post_id, p.author_username, p.text, p.permalink,
       p.created_at, p.first_seen_at, p.media_type, p.scraper_user_id,
+      COALESCE(si.scrapers, ARRAY[p.scraper_user_id]) AS scrapers,
       p.like_count, p.reply_count, p.repost_count, p.reshare_count
     FROM threads_posts p
+    LEFT JOIN sightings si ON si.post_id = p.post_id
     WHERE
-      -- keyword: NULL param → home feed (keyword IS NULL); non-null → that keyword
-      (NOT p_has_keyword AND p.keyword IS NULL)
-        OR (p_has_keyword AND p.keyword = p_keyword)
-      -- author
+      ((NOT p_has_keyword AND p.keyword IS NULL) OR (p_has_keyword AND p.keyword = p_keyword))
       AND (p_author = '' OR p.author_username ILIKE '%' || p_author || '%')
-      -- min likes
       AND (p_min_likes = 0 OR p.like_count >= p_min_likes)
-      -- time window: use published time when available, scrape time otherwise
       AND (
         p_time_window_hours = 0
         OR (p.created_at > 0 AND TO_TIMESTAMP(p.created_at) > NOW() - (p_time_window_hours || ' hours')::INTERVAL)
         OR (p.created_at = 0 AND p.first_seen_at            > NOW() - (p_time_window_hours || ' hours')::INTERVAL)
       )
-      -- media type: TEXT filter also matches NULL media_type
       AND (
         p_media_types IS NULL
         OR p.media_type = ANY(p_media_types)
         OR ('TEXT' = ANY(p_media_types) AND p.media_type IS NULL)
       )
+      AND (
+        p_scraper_ids IS NULL
+        OR EXISTS (
+          SELECT 1 FROM threads_post_scrapers tps
+          WHERE tps.post_id = p.post_id AND tps.scraper_user_id = ANY(p_scraper_ids)
+        )
+      )
   )
   SELECT
     f.post_id, f.author_username, f.text, f.permalink,
     f.created_at, f.first_seen_at, f.media_type, f.scraper_user_id,
+    f.scrapers,
     f.like_count, f.reply_count, f.repost_count, f.reshare_count,
     COUNT(*) OVER()::BIGINT AS total_count
   FROM filtered f
   ORDER BY
-    -- posted sort: valid timestamps first (created_at DESC), then zero-ts rows by first_seen_at
     CASE WHEN p_sort_by = 'posted' AND f.created_at > 0 THEN 0 ELSE 1 END ASC,
     CASE WHEN p_sort_by = 'posted' THEN f.created_at END DESC NULLS LAST,
     f.first_seen_at DESC
@@ -253,4 +297,4 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION get_threads_posts(INTEGER, INTEGER, TEXT, INTEGER, INTEGER, BOOLEAN, TEXT, TEXT, TEXT[]) TO anon;
+GRANT EXECUTE ON FUNCTION get_threads_posts(INTEGER, INTEGER, TEXT, INTEGER, INTEGER, BOOLEAN, TEXT, TEXT, TEXT[], TEXT[]) TO anon;

@@ -61,6 +61,7 @@ export async function getThreadsPosts({
   keyword = null,
   sortBy = 'scraped',
   mediaTypes = [],
+  scraperIds = [],
 } = {}) {
   const hasKeyword = keyword !== null && keyword !== undefined
 
@@ -74,6 +75,7 @@ export async function getThreadsPosts({
     p_keyword:            hasKeyword ? keyword : null,
     p_sort_by:            sortBy || 'scraped',
     p_media_types:        mediaTypes?.length > 0 ? mediaTypes : null,
+    p_scraper_ids:        scraperIds?.length > 0 ? scraperIds : null,
   })
 
   if (error) throw new Error(error.message)

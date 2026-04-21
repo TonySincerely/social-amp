@@ -13,7 +13,7 @@ An internal tool for validating product ideas through coordinated social media a
 | **Calendar Planner** | `/planner` | Generate a full month of skeleton post slots based on best-practice frequency, optimal times, and platform-specific day distribution. |
 | **Calendar** | `/calendar` | Monthly grid of all posts. Draft slots (from planner) and ready posts (from studio) shown with distinct visual states. Click any date to open Quick Create pre-filled with that date. |
 | **Pulse** | `/pulse` | Daily trend and planning view. Upcoming cultural moments (next 6 weeks, region-aware) alongside live trend snapshots across Twitter, Reddit, Instagram, and the web. Star trends, send directly to Content Studio as an angle. |
-| **Scraper** | `/scraper` | Local Threads feed monitor. Scrapes your Threads home feed via Playwright, stores engagement snapshots in SQLite, calculates velocity to surface viral posts. Controlled from the browser (Start/Stop/Logs). Feed cards link directly to the post on Threads. Leaderboard cards send post text to Content Studio via "Post as →". Requires local API server — hidden/read-only when deployed. |
+| **Scraper** | `/scraper` | Local Threads feed monitor. Scrapes your Threads home feed via Playwright, stores engagement snapshots in SQLite, calculates velocity to surface viral posts. Feed and leaderboard data loads from Supabase on all devices — Start/Stop/Logs controls only appear when a local scraper server is reachable. Leaderboard cards send post text to Content Studio via "Post as →". |
 | **Quick Create** | Sidebar `+ New Post` | Right-side overlay drawer. 4-step wizard to go from zero to a scheduled post without leaving the current view. |
 
 ---
@@ -288,10 +288,10 @@ The Scraper module collects real engagement data from your Threads home feed usi
 6. Velocity calculated as Δlikes ÷ Δtime between first and last snapshot
 
 **Scraper view (`/scraper → Threads tab`):**
-- **Control bar** — unified Start button (context-aware: `Start scraper` on home feed, `Start scraper: [keyword]` with a keyword active), frequency selector (`Once · 30m · 1h · 2h · 4h`, persisted in localStorage), Stop/Cancel loop, collapsible log panel (SSE stream from server stdout). Status dot: green pulse (running) / teal (loop countdown) / grey (idle). Status label shows countdown between runs: `Next run in 14m · "ai"`.
+- **Control bar** — only rendered when the local scraper server is reachable. Unified Start button (context-aware: `Start scraper` on home feed, `Start scraper: [keyword]` with a keyword active), frequency selector (`Once · 30m · 1h · 2h · 4h`, persisted in localStorage), Stop/Cancel loop, collapsible log panel (SSE stream from server stdout). Status dot: green pulse (running) / teal (loop countdown) / grey (idle). Status label shows countdown between runs: `Next run in 14m · "ai"`. When no local server is detected, a notice is shown and feed/leaderboard data still loads from Supabase.
 - **Leaderboard tab** — posts ranked by **viral score** (composite velocity across likes, replies ×2, reposts ×3) over a 6h window. Requires ≥2 scrape cycles. Each card shows the score, absolute engagement counts, media type badge, age-band left border, and a **Go to →** link.
 - **Feed tab** — keyword bar at the top + posts with a filter/sort bar, pagination. Each card shows the post's published time, a `scraped [date time]` label, and a coloured left border indicating content age (green < 6h, amber 6–24h, orange 24–48h). Media type badges (`img` / `vid` / `carousel`) shown next to repost count when applicable. **Go to →** link opens the post on Threads in a new tab.
-- Control bar hidden when `VITE_LOCAL_API_URL` is not set (deployed mode)
+- Control bar hidden when local scraper server is not reachable; feed and leaderboard still load from Supabase
 
 **Feed filters and sort:**
 - **Author** — free-text filter on handle
@@ -440,6 +440,8 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 ## Current status
 
 **Working as of 2026-04-21.**
+
+- Scraper page loads feed and leaderboard from Supabase regardless of local server availability; Start/Stop/Logs controls appear only when a local scraper is reachable — functional
 
 - Scraper login, post extraction, engagement counts, Supabase persistence — functional
 - Scraper control from browser UI (Start/Stop/Logs via SSE) — functional

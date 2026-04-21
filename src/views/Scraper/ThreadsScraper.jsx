@@ -187,16 +187,17 @@ export function ThreadsScraper() {
     probeLocalServer().then(setLocalAvailable)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Initial load once probe resolves to true
+  // Load data on mount regardless of local server availability
+  useEffect(() => {
+    getAllProducts().then(setProducts).catch(() => {})
+    fetchVelocity()
+    fetchPosts(1, filters)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Connect to local server once probe resolves
   useEffect(() => {
     if (localAvailable !== true) return
-    getAllProducts().then(setProducts).catch(() => {})
-    fetchStatus().then(s => {
-      if (s) {
-        fetchVelocity()
-        fetchPosts(1, filters)
-      }
-    })
+    fetchStatus()
   }, [localAvailable]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Polling while running
@@ -254,12 +255,11 @@ export function ThreadsScraper() {
     prevRunningRef.current = status.running
   }, [status.running]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Refetch when tab, page, or server availability changes
+  // Refetch when tab or page changes
   useEffect(() => {
-    if (!serverReachable) return
     if (innerTab === 'leaderboard') fetchVelocity()
     else fetchPosts(page, filters)
-  }, [innerTab, page, serverReachable]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [innerTab, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function applyFilters(newFilters) {
     setFilters(newFilters)
@@ -361,41 +361,12 @@ export function ThreadsScraper() {
     setOpenPicker(prev => prev === post.post_id ? null : post.post_id)
   }
 
-  if (localAvailable === null) {
-    return <div className="sc-checking">Checking for local server…</div>
-  }
-
-  if (localAvailable === false) {
-    return (
-      <div className="sc-offline">
-        <div className="sc-offline-icon">⚙</div>
-        <h3>Local server not connected</h3>
-        <p>The Scraper runs locally on your machine. Start the API server to use this module.</p>
-        <code>npm run scraper:server</code>
-      </div>
-    )
-  }
-
-  if (serverReachable === false) {
-    return (
-      <div className="sc-offline">
-        <div className="sc-offline-icon">⚠</div>
-        <h3>Server not running</h3>
-        <p>Start the local API server in your terminal:</p>
-        <code>npm run scraper:server</code>
-        <button className="sc-retry-btn" onClick={fetchStatus}>Retry connection</button>
-      </div>
-    )
-  }
-
-  if (serverReachable === null) {
-    return <div className="sc-checking">Connecting to local server…</div>
-  }
+  const controlAvailable = localAvailable === true && serverReachable === true
 
   return (
     <div className="sc-content">
-      {/* Control bar */}
-      <div className="sc-control-bar">
+      {/* Control bar — only shown when local scraper server is reachable */}
+      {controlAvailable && <div className="sc-control-bar">
         <div className="sc-status">
           <span className={`sc-dot ${status.running ? 'sc-dot-running' : loopSecondsLeft !== null ? 'sc-dot-loop' : 'sc-dot-idle'}`} />
           <span className="sc-status-label">
@@ -440,10 +411,17 @@ export function ThreadsScraper() {
             Logs {logs.length > 0 && <span className="sc-log-count">{logs.length}</span>}
           </button>
         </div>
-      </div>
+      </div>}
+
+      {/* No-server notice */}
+      {localAvailable === false && (
+        <div className="sc-no-server-notice">
+          No local scraper running — Start/Stop unavailable. Showing shared data from Supabase.
+        </div>
+      )}
 
       {/* Log panel */}
-      {logsOpen && (
+      {controlAvailable && logsOpen && (
         <div className="sc-log-panel">
           {logs.length === 0
             ? <span className="sc-log-empty">No output yet.</span>

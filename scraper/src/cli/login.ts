@@ -20,7 +20,8 @@ async function main() {
     const alreadyLoggedIn = await isLoggedIn(page);
     if (alreadyLoggedIn) {
       console.log('✅ Already logged in! Session is valid.\n');
-      console.log('   You can close this window and run: npm run test-scrape');
+      console.log('   Press Enter to close the browser...');
+      await new Promise<void>((resolve) => { process.stdin.once('data', () => resolve()); });
     } else {
       await waitForManualLogin(page);
       console.log('   Session saved. You can close this window.');

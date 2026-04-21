@@ -31,21 +31,23 @@ export async function launchBrowser(
  */
 export async function isLoggedIn(page: Page): Promise<boolean> {
   await page.goto(CONFIG.THREADS_HOME, { waitUntil: 'domcontentloaded' });
-  // Give the page a moment to settle and redirect if needed
-  await page.waitForTimeout(3000);
+  // Wait for any post-load redirects (login redirect, splash page, etc.)
+  await page.waitForTimeout(4000);
 
   const url = page.url();
-  // If we got redirected to login, we're not logged in
-  if (url.includes('/login')) {
+  // Must have landed on threads.net root — any redirect means not logged in
+  if (!url.match(/^https:\/\/(www\.)?threads\.net\/?(\?|#|$)/)) {
     return false;
   }
 
-  // Check for feed content indicators
+  // Confirm feed content is present, not just a splash/marketing page
   try {
-    await page.waitForSelector('[data-pressable-container=true]', {
-      timeout: 10000,
+    await page.waitForSelector('article, [role="feed"], [data-pressable-container=true]', {
+      timeout: 8000,
     });
-    return true;
+    // Extra check: nav must exist (logged-in layout), not just marketing content
+    const hasNav = await page.$('nav') !== null;
+    return hasNav;
   } catch {
     return false;
   }
@@ -66,12 +68,18 @@ export async function waitForManualLogin(page: Page): Promise<void> {
     process.stdin.once('data', () => resolve());
   });
 
-  // Verify login worked
-  const loggedIn = await isLoggedIn(page);
-  if (!loggedIn) {
-    throw new Error(
-      'Login verification failed. Make sure you can see your feed before pressing Enter.'
-    );
+  // Verify login by checking current page state without navigating away
+  const url = page.url();
+  const onFeed = !!url.match(/^https:\/\/(www\.)?threads\.net\/?(\?|#|$)/);
+  const hasFeedContent = onFeed && await page.$('[data-pressable-container=true]') !== null;
+  if (!hasFeedContent) {
+    // Fall back to a full check in case the user navigated somewhere during login
+    const loggedIn = await isLoggedIn(page);
+    if (!loggedIn) {
+      throw new Error(
+        'Login verification failed. Make sure you can see your feed before pressing Enter.'
+      );
+    }
   }
 
   console.log('✅ Login successful! Session saved.\n');

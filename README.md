@@ -467,6 +467,7 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 - `better-sqlite3` removed — scraper writes directly to Supabase; no native compilation or Python required during `npm install`, works on Node 24
 - RLS error on `savePosts` now logs a clear hint to check `SUPABASE_SERVICE_KEY` (must be the service_role key, not the anon key)
 - Installer (`install-mac.command`): exits with error if `npm install` fails; login step now correctly instructs user to press Enter in Terminal after seeing their feed; login exit code checked with a warning if unverified
+- Login flow: `isLoggedIn` now requires the URL to match `threads.net/` root exactly and checks for a `nav` element to distinguish the logged-in feed from splash/marketing pages — prevents false-positive "already logged in" detection that previously closed the browser before the user could log in; verification after pressing Enter checks current page state without navigating away; "already logged in" branch now waits for Enter before closing so the browser doesn't vanish instantly
 - Distribution zip must include `install-mac.command`, `install-windows.bat`, `install-windows.ps1`, and a `scraper/` subfolder containing `package.json`, `tsconfig.json`, and `src/` — the installer expects this exact layout
 
 **Known issues:**

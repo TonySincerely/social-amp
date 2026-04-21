@@ -417,7 +417,10 @@ export function ThreadsScraper() {
       {localAvailable === false && (
         <div className="sc-no-server-notice">
           No local scraper detected — Start/Stop unavailable. Showing shared data from Supabase.
-          {' '}If your scraper is running, open this page in <strong>Chrome</strong> (Safari blocks local server connections from HTTPS).
+          {' '}If your scraper is running, use <strong>Chrome</strong> and{' '}
+          <button className="sc-retry-link" onClick={() => probeLocalServer().then(setLocalAvailable)}>
+            retry detection
+          </button>.
         </div>
       )}
 

@@ -75,7 +75,7 @@ social-amp/
 
 - Node.js 18+
 
-No native build tools required. The C++ dependency (`better-sqlite3`) has been replaced by Supabase — `npm install` compiles nothing.
+No native build tools required. `npm install` compiles nothing — the scraper writes directly to Supabase, so `better-sqlite3` has been removed entirely.
 
 ### Web app setup
 

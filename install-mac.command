@@ -38,7 +38,12 @@ if [ ! -d "$SCRAPER_DIR" ]; then
   exit 1
 fi
 cd "$SCRAPER_DIR"
-npm install
+if ! npm install; then
+  echo ""
+  echo "  ERROR: npm install failed. See the error above."
+  read -rp "  Press Enter to close..."
+  exit 1
+fi
 echo "  ✓ Done"
 echo ""
 
@@ -73,16 +78,25 @@ echo "================================"
 echo "  Log in to Threads"
 echo "================================"
 echo ""
-echo "  A browser window will open."
-echo "  Log in to your Threads account, then close the browser."
+echo "  A browser window will open. Log in to your Threads account."
+echo "  Once you can see your feed, come back here and press Enter."
 echo ""
 read -rp "  Press Enter to open the browser..."
 echo ""
 cd "$SCRAPER_DIR"
-npm run login || true   # browser close can exit non-zero, that's fine
-echo ""
-echo "  ✓ Login complete."
-echo ""
+if npm run login; then
+  echo ""
+  echo "  ✓ Login verified."
+  echo ""
+else
+  echo ""
+  echo "  ⚠ Login could not be verified."
+  echo "  If you completed login, this may be a browser issue — you can retry later:"
+  echo "    cd $SCRAPER_DIR && npm run login"
+  echo ""
+  read -rp "  Press Enter to continue anyway, or Ctrl+C to exit and retry..."
+  echo ""
+fi
 
 # ── Desktop launcher ──────────────────────────────────────────────────────────
 LAUNCHER="$HOME/Desktop/Start Scraper.command"

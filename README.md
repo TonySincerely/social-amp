@@ -441,11 +441,11 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 
 **Working as of 2026-04-21.**
 
-- Scraper page loads feed and leaderboard from Supabase regardless of local server availability; Start/Stop/Logs controls appear only when a local scraper is reachable — functional
-
 - Scraper login, post extraction, engagement counts, Supabase persistence — functional
 - Scraper control from browser UI (Start/Stop/Logs via SSE) — functional
-- Feed and leaderboard tabs — functional (data served from Supabase, visible when deployed and locally)
+- Feed and leaderboard load from Supabase on all devices regardless of local server availability; Start/Stop/Logs controls appear only when a local scraper server is reachable; "retry detection" link in the no-server notice for when the page loads before the server starts — functional
+- Feed tab is the default view on the Scraper page
+- No-server notice hints to use Chrome if scraper is running but not detected (Safari blocks HTTP fetch from HTTPS pages; Chrome has a localhost exception) — open issue, Safari not yet supported for scraper control
 - Local server detected at runtime — control bar appears automatically when `npm run scraper:server` is running, even on the deployed Vercel app; no `.env.local` required
 - Feed cards: published time + `scraped [date time]` + scraper user ID label; media type badges; age-band left border — functional
 - Feed sort by scraped time or published time — functional
@@ -458,8 +458,14 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 - Leaderboard cards show "seen by N scrapers" badge + amber left border when scraper_count > 1 — functional
 - Scraper attribution: each post tagged with `scraper_user_id`; sightings tracked in `threads_post_scrapers` junction table
 - Multi-scraper support: multiple team members scrape from their own Threads accounts; all data merges into the shared Supabase project
-- Existing SQLite data migrated via `npm run scraper:migrate`
-- Installer scripts for non-technical teammates — `install-mac.command` / `install-windows.bat` + `install-windows.ps1`; creates a "Start Scraper" desktop shortcut; user-facing guide in `SCRAPER_SETUP.md`
+- `better-sqlite3` removed — scraper writes directly to Supabase; no native compilation or Python required during `npm install`, works on Node 24
+- RLS error on `savePosts` now logs a clear hint to check `SUPABASE_SERVICE_KEY` (must be the service_role key, not the anon key)
+- Installer (`install-mac.command`): exits with error if `npm install` fails; login step now correctly instructs user to press Enter in Terminal after seeing their feed; login exit code checked with a warning if unverified
+- Distribution zip must include `install-mac.command`, `install-windows.bat`, `install-windows.ps1`, and a `scraper/` subfolder containing `package.json`, `tsconfig.json`, and `src/` — the installer expects this exact layout
+
+**Known issues:**
+- Safari blocks HTTP fetch from HTTPS pages — scraper control bar not reachable from Safari; use Chrome. Long-term fix: Supabase-based control (no local server required) or HTTPS local server with trusted cert via mkcert
+- `npm run scraper:migrate` references removed SQLite dependency — safe to ignore, migration was a one-time operation
 
 **Known Windows-specific notes:**
 - Scraper must be spawned with `stdio: ['inherit', 'pipe', 'pipe']` — Chrome exits with code 21 if stdin handle is `INVALID_HANDLE_VALUE`
@@ -469,6 +475,7 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 
 ## What's next
 
+- **Safari support for scraper control** — replace local HTTP server with Supabase-based command/status table so control works from any browser without mixed-content restrictions
 - **Topbar title** — add `'/scraper': 'Scraper'` to the `pageTitles` map in `src/components/Topbar.jsx`
 - **Additional scraper tabs** — Scraper view is tab-structured for future platforms (Instagram, X, etc.)
 

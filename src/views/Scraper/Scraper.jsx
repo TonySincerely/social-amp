@@ -12,7 +12,6 @@ export function Scraper() {
       <div className="sc-header">
         <div>
           <h1 className="sc-title">Scraper</h1>
-          <p className="sc-subtitle">Collect and monitor posts from social feeds</p>
         </div>
         <div className="sc-tab-bar">
           {TABS.map(t => (

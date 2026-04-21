@@ -363,6 +363,7 @@
   margin-bottom: 20px;
 }
 
+
 .sc-inner-tab {
   padding: 8px 18px;
   border: none;
@@ -565,21 +566,266 @@
   50% { opacity: 0.3; }
 }
 
-/* ── Last scraped ───────────────────────────────────────────────────── */
-.sc-last-scraped {
+/* ── Keyword bar ─────────────────────────────────────────────────────── */
+.sc-keyword-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.sc-keyword-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Freshness badge ─────────────────────────────────────────────────── */
+.sc-freshness-badge {
   font-size: 11px;
   color: var(--ink-3);
   font-family: var(--font-mono);
-  margin-left: auto;
   white-space: nowrap;
 }
 
+.sc-freshness-stale {
+  color: #b45309;
+}
+
+/* ── Scrape now button ───────────────────────────────────────────────── */
+.sc-scrape-now-btn {
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.sc-scrape-now-btn:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--on-dark);
+  border-color: var(--ink);
+}
+
+.sc-scrape-now-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ── Sort segmented control ──────────────────────────────────────────── */
+.sc-sort-group {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.sc-sort-btn {
+  padding: 4px 10px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.sc-sort-btn:last-child {
+  border-right: none;
+}
+
+.sc-sort-btn:hover:not(.sc-sort-btn-active) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.sc-sort-btn-active {
+  background: var(--ink);
+  color: var(--on-dark);
+}
+
+/* ── Dropdowns (Scrapers + Filters popover) ──────────────────────────── */
+.sc-dropdown-wrap {
+  position: relative;
+}
+
+.sc-dropdown-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.sc-dropdown-btn:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.sc-dropdown-btn-active {
+  background: var(--ink);
+  color: var(--on-dark);
+  border-color: var(--ink);
+}
+
+.sc-dropdown-btn-active:hover {
+  background: var(--ink-2);
+}
+
+.sc-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  min-width: 160px;
+  z-index: 20;
+  overflow: hidden;
+}
+
+.sc-dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 0;
+}
+
+.sc-dropdown-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 7px 12px;
+  background: transparent;
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.sc-dropdown-item:hover {
+  background: var(--surface-2);
+}
+
+.sc-dropdown-item-active {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sc-dropdown-check {
+  gap: 8px;
+  cursor: pointer;
+}
+
+.sc-dropdown-check input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--ink);
+}
+
+/* ── Filters popover panel ───────────────────────────────────────────── */
+.sc-filters-panel {
+  min-width: 220px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sc-popover-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sc-popover-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sc-popover-clear {
+  align-self: flex-start;
+  padding: 4px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.sc-popover-clear:hover {
+  background: var(--ink);
+  color: var(--on-dark);
+  border-color: var(--ink);
+}
+
+/* ── Age band legend ─────────────────────────────────────────────────── */
+.sc-age-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+
+.sc-age-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sc-age-dot-live { background: #22c55e; }
+.sc-age-dot-day  { background: #f59e0b; }
+.sc-age-dot-old  { background: #f97316; }
+
+.sc-age-legend-label {
+  font-size: 10px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  margin-right: 6px;
+}
+
 /* ── Feed ───────────────────────────────────────────────────────────── */
+.sc-filter-tray {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+
 .sc-filters {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -644,16 +890,17 @@
 }
 
 .sc-chip-active {
-  background: var(--ink);
-  color: var(--on-dark);
-  border-color: var(--ink);
+  background: var(--teal-l);
+  color: var(--teal);
+  border-color: var(--teal);
+  font-weight: 600;
 }
 
 .sc-keyword-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
   padding-bottom: 12px;
   margin-bottom: 12px;
   border-bottom: 1px solid var(--border);
@@ -828,6 +1075,10 @@
   line-height: 1.55;
   margin: 0 0 10px;
   word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .sc-post-footer {

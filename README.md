@@ -284,24 +284,28 @@ The Scraper module collects real engagement data from your Threads home feed usi
 2. Scrapes `div[data-pressable-container='true']` containers for post text, author, timestamp, engagement counts, and media type
 3. Media type detected from DOM: `video` element → `VIDEO`; multiple non-profile `img` tags → `CAROUSEL`; one → `IMAGE`; text-only → `TEXT`
 4. Engagement buttons identified by SVG `aria-label` values (`讚`/`Like`, `回覆`/`Reply`, `轉發`/`Repost`, `分享`/`Share`)
-5. Posts and snapshots written to SQLite at `~/.threads-tracker/tracker.db`
+5. Posts and snapshots written directly to Supabase via the service-role key
 6. Velocity calculated as Δlikes ÷ Δtime between first and last snapshot
 
 **Scraper view (`/scraper → Threads tab`):**
 - **Control bar** — only rendered when the local scraper server is reachable. Unified Start button (context-aware: `Start scraper` on home feed, `Start scraper: [keyword]` with a keyword active), frequency selector (`Once · 30m · 1h · 2h · 4h`, persisted in localStorage), Stop/Cancel loop, collapsible log panel (SSE stream from server stdout). Status dot: green pulse (running) / teal (loop countdown) / grey (idle). Status label shows countdown between runs: `Next run in 14m · "ai"`. When no local server is detected, a notice is shown and feed/leaderboard data still loads from Supabase.
+- **Feed tab** (default) — keyword bar + filter tray + paginated post cards. Each card shows the post's published time (hover reveals full posted time, scraped time, and scraper ID), text clamped to 3 lines, engagement counts, media type badge, and a coloured left border indicating content age (green < 6h, amber < 24h, orange 24h+). **Go to →** opens the post on Threads in a new tab.
 - **Leaderboard tab** — posts ranked by **viral score** (composite velocity across likes, replies ×2, reposts ×3) over a 6h window. Requires ≥2 scrape cycles. Each card shows the score, absolute engagement counts, media type badge, age-band left border, and a **Go to →** link.
-- **Feed tab** — keyword bar at the top + posts with a filter/sort bar, pagination. Each card shows the post's published time, a `scraped [date time]` label, and a coloured left border indicating content age (green < 6h, amber 6–24h, orange 24–48h). Media type badges (`img` / `vid` / `carousel`) shown next to repost count when applicable. **Go to →** link opens the post on Threads in a new tab.
 - Control bar hidden when local scraper server is not reachable; feed and leaderboard still load from Supabase
 
 **Feed filters and sort:**
-- **Author** — free-text filter on handle
-- **Min likes** — numeric threshold
-- **Sort** — `Scraped` (default, ordered by when the post was collected) or `Posted` (ordered by publish time; posts with no timestamp fall back to scrape time and sort to the bottom)
-- **Time window** — `Live · 6h / 24h / 48h`, default 24h. Filters by published time when available, scrape time otherwise. "All time" and "7d" removed — posts older than 48h are past the Threads viral window and add noise.
+The filter tray groups all controls in a single contained row:
+- **Time window** — `Live · 6h / 24h / 48h / All` chips (default 24h). Filters by published time with scrape-time fallback.
+- **Sort** — segmented control: `Recent` (scrape time, default) · `Posted` (publish time; no-timestamp posts sort to bottom) · `Top` (most likes). Requires `supabase/migrations/002_top_sort.sql` to be applied.
 - **Media** — `All / Img / Vid / Carousel / Text` multi-select chips. `Text` includes posts with no detected media type.
+- **Scrapers ▾** — multi-select dropdown listing all scrapers seen in current results. Scales to any team size. Shows active count badge when filtered.
+- **Filters ▾** — popover with author (free-text handle filter) and min likes threshold. Active filter count shown on button.
 
 **Keyword search (Feed tab):**
-Type a keyword (e.g. `ai`, `政治`, `可愛`) in the `+ Add keyword…` input and press Enter to save it as a chip. Saved chips persist in localStorage (`threads_saved_keywords`). Chips are **view-only** — clicking switches which results you see without triggering a scrape. To scrape, select the keyword chip (making it active) then hit **Start scraper: [keyword]** in the control bar. A `last scraped X ago` label in the keyword bar shows data freshness. Click **Home feed** to return to untagged home feed posts.
+Type a keyword (e.g. `ai`, `政治`, `可愛`) in the `+ Add keyword…` input and press Enter to save it as a chip. Saved chips persist in localStorage (`threads_saved_keywords`). Chips are **view-only** — clicking switches which results you see without triggering a scrape. To scrape the active keyword, either hit **Start scraper: [keyword]** in the control bar or use the **↻ Scrape now** shortcut that appears inline in the keyword bar when the server is idle. Click **Home feed** to return to untagged home feed posts.
+
+**Data freshness:**
+A **Last scraped X ago** badge sits at the right of the keyword bar and turns amber when data is more than 2 hours old. The timestamp persists in localStorage (`threads_last_scraped_times`) so it survives page reloads. The feed refreshes automatically when a scrape cycle completes.
 
 **Loop scheduling:**
 The frequency selector controls repeat behaviour. `Once` = one cycle then stop. Any other value (30m–4h) schedules the next run automatically after the current one completes, counting from run end. The loop target (home feed or keyword) is locked at Start time — switching keyword tabs mid-loop does not change what gets scraped. Stop cancels both the active run and any pending next cycle. `Cancel loop` appears in place of Start during the countdown between runs. The backend process always runs a single cycle when launched from the UI; the frontend owns all loop timing. Running `npm run scraper:start` directly (CLI) still uses the built-in continuous loop.
@@ -444,15 +448,17 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 - Scraper login, post extraction, engagement counts, Supabase persistence — functional
 - Scraper control from browser UI (Start/Stop/Logs via SSE) — functional
 - Feed and leaderboard load from Supabase on all devices regardless of local server availability; Start/Stop/Logs controls appear only when a local scraper server is reachable; "retry detection" link in the no-server notice for when the page loads before the server starts — functional
-- Feed tab is the default view on the Scraper page
+- Feed tab is the default view (tab order: Feed | Leaderboard)
 - No-server notice hints to use Chrome if scraper is running but not detected (Safari blocks HTTP fetch from HTTPS pages; Chrome has a localhost exception) — open issue, Safari not yet supported for scraper control
 - Local server detected at runtime — control bar appears automatically when `npm run scraper:server` is running, even on the deployed Vercel app; no `.env.local` required
-- Feed cards: published time + `scraped [date time]` + scraper user ID label; media type badges; age-band left border — functional
-- Feed sort by scraped time or published time — functional
-- Feed media type filter (All / Img / Vid / Carousel / Text, multi-select) — functional
-- Feed time window (Live · 6h / 24h / 48h / All) — filters by published time with scrape-time fallback; "All" shows every saved post regardless of age — functional
+- Feed cards: published time (hover reveals full posted time, scraped time, and scraper ID); text clamped to 3 lines; media type badges; age-band left border — functional
+- Feed sort: Recent (scrape time) · Posted (publish time) · Top (most likes). Top sort requires `supabase/migrations/002_top_sort.sql` to be applied in the Supabase SQL editor.
+- Feed media type filter (All / Img / Vid / Carousel / Text, multi-select chips) — functional
+- Feed time window (Live · 6h / 24h / 48h / All, default 24h) — filters by published time with scrape-time fallback — functional
 - Feed shows count of posts hidden by the active time window with a one-click "show all" link — functional
-- Feed scraper filter row — populated dynamically from scrapers in current results; multi-select chips — functional
+- Scrapers filter: multi-select dropdown (scales to large teams); Author and Min likes collapsed into Filters ▾ popover — functional
+- Data freshness badge: "Last scraped X ago" persisted in localStorage, turns amber when >2h stale — functional
+- ↻ Scrape now inline button in keyword bar when server is idle — functional
 - Leaderboard viral score: composite velocity (Δlikes×1 + Δreplies×2 + Δreposts×3) / minutes, 6h window — computed via Supabase RPC
 - Cross-bubble score boost: leaderboard score multiplied by `1 + (scraper_count − 1) × 0.5` — posts seen by multiple scrapers rank higher
 - Leaderboard cards show "seen by N scrapers" badge + amber left border when scraper_count > 1 — functional
@@ -478,6 +484,7 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 - **Safari support for scraper control** — replace local HTTP server with Supabase-based command/status table so control works from any browser without mixed-content restrictions
 - **Topbar title** — add `'/scraper': 'Scraper'` to the `pageTitles` map in `src/components/Topbar.jsx`
 - **Additional scraper tabs** — Scraper view is tab-structured for future platforms (Instagram, X, etc.)
+- **NSFW / hide posts** — per-post hide and per-author block, team-wide via Supabase (`hidden` flag on `threads_posts` + `threads_blocked_authors` table); hidden posts filterable via Filters ▾ popover. Parked — not yet implemented.
 
 ---
 

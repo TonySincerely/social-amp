@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   probeLocalServer,
   getScraperStatus,
@@ -10,7 +9,6 @@ import {
   getThreadsPosts,
   getThreadsVelocity,
 } from '../../services/threads'
-import { getAllProducts } from '../../services/storage'
 
 const TIME_WINDOWS = [
   { label: 'Live · 6h', value: 6 },
@@ -24,6 +22,12 @@ const MEDIA_TYPES = [
   { label: 'Vid', value: 'VIDEO' },
   { label: 'Carousel', value: 'CAROUSEL' },
   { label: 'Text', value: 'TEXT' },
+]
+
+const SORT_OPTIONS = [
+  { label: 'Recent', value: 'scraped', title: 'Sort by scrape time' },
+  { label: 'Posted', value: 'posted', title: 'Sort by publish time' },
+  { label: 'Top', value: 'top', title: 'Sort by most likes' },
 ]
 
 const FREQUENCIES = [
@@ -94,9 +98,7 @@ function formatCountdown(seconds) {
 }
 
 export function ThreadsScraper() {
-  const navigate = useNavigate()
-
-  const [localAvailable, setLocalAvailable] = useState(null) // null=probing, true=found, false=not found
+  const [localAvailable, setLocalAvailable] = useState(null)
   const [serverReachable, setServerReachable] = useState(null)
   const [status, setStatus] = useState({ running: false, pid: null, keyword: null })
   const [innerTab, setInnerTab] = useState('feed')
@@ -104,28 +106,33 @@ export function ThreadsScraper() {
   const [posts, setPosts] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [filters, setFilters] = useState({ author: '', minLikes: 0, timeWindow: 24, sortBy: 'scraped', mediaTypes: [], scraperIds: [] })
+  const [filters, setFilters] = useState({
+    author: '', minLikes: 0, timeWindow: 24, sortBy: 'scraped', mediaTypes: [], scraperIds: [],
+  })
   const [availableScrapers, setAvailableScrapers] = useState([])
   const [logs, setLogs] = useState([])
   const [logsOpen, setLogsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [filteredOutCount, setFilteredOutCount] = useState(0)
-  const [products, setProducts] = useState([])
-  const [openPicker, setOpenPicker] = useState(null)
+  const [showScrapersDropdown, setShowScrapersDropdown] = useState(false)
+  const [showFiltersPopover, setShowFiltersPopover] = useState(false)
 
   const [savedKeywords, setSavedKeywords] = useState(() => {
     try { return JSON.parse(localStorage.getItem('threads_saved_keywords') || '[]') }
     catch { return [] }
   })
-  const [activeKeyword, setActiveKeyword] = useState(null) // null = home feed
+  const [activeKeyword, setActiveKeyword] = useState(null)
   const [keywordInput, setKeywordInput] = useState('')
   const [runFrequency, setRunFrequency] = useState(() =>
     parseInt(localStorage.getItem('scraper_run_frequency') || '0', 10)
   )
   const [loopSecondsLeft, setLoopSecondsLeft] = useState(null)
   const [loopTarget, setLoopTarget] = useState(null)
-  const [lastScrapedAt, setLastScrapedAt] = useState({})
+  const [lastScrapedAt, setLastScrapedAt] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('threads_last_scraped_times') || '{}') }
+    catch { return {} }
+  })
 
   const logEndRef = useRef(null)
   const pollRef = useRef(null)
@@ -137,8 +144,22 @@ export function ThreadsScraper() {
   const countdownIntervalRef = useRef(null)
   const loopCancelledRef = useRef(false)
   const runFrequencyRef = useRef(0)
+  const scrapersDropdownRef = useRef(null)
+  const filtersPopoverRef = useRef(null)
 
   const LIMIT = 20
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (showScrapersDropdown && scrapersDropdownRef.current && !scrapersDropdownRef.current.contains(e.target))
+        setShowScrapersDropdown(false)
+      if (showFiltersPopover && filtersPopoverRef.current && !filtersPopoverRef.current.contains(e.target))
+        setShowFiltersPopover(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showScrapersDropdown, showFiltersPopover])
 
   const addLog = useCallback((line) => {
     setLogs(prev => [...prev.slice(-499), line])
@@ -160,14 +181,18 @@ export function ThreadsScraper() {
     try {
       const { results } = await getThreadsVelocity()
       setVelocity(results)
-    } catch { /* server not running */ }
+    } catch { }
   }, [])
 
   const fetchPosts = useCallback(async (p = page, f = filters, kw = activeKeyword) => {
     try {
       setLoading(true)
       const [data, unfiltered] = await Promise.all([
-        getThreadsPosts({ page: p, limit: LIMIT, author: f.author, minLikes: f.minLikes, timeWindow: f.timeWindow, keyword: kw, sortBy: f.sortBy, mediaTypes: f.mediaTypes, scraperIds: f.scraperIds }),
+        getThreadsPosts({
+          page: p, limit: LIMIT, author: f.author, minLikes: f.minLikes,
+          timeWindow: f.timeWindow, keyword: kw, sortBy: f.sortBy,
+          mediaTypes: f.mediaTypes, scraperIds: f.scraperIds,
+        }),
         f.timeWindow > 0
           ? getThreadsPosts({ page: 1, limit: 1, author: f.author, keyword: kw, mediaTypes: f.mediaTypes, scraperIds: f.scraperIds })
           : Promise.resolve(null),
@@ -175,32 +200,26 @@ export function ThreadsScraper() {
       setPosts(data.posts)
       setTotal(data.total)
       setFilteredOutCount(unfiltered ? Math.max(0, unfiltered.total - data.total) : 0)
-      // Collect unique scrapers seen across current page for the filter row
       const seen = [...new Set(data.posts.flatMap(p => p.scrapers ?? []).filter(Boolean))].sort()
       setAvailableScrapers(prev => [...new Set([...prev, ...seen])].sort())
     } catch (err) { console.error('fetchPosts error:', err) }
     finally { setLoading(false) }
   }, [page, filters, activeKeyword])
 
-  // Probe for local server on mount
   useEffect(() => {
     probeLocalServer().then(setLocalAvailable)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load data on mount regardless of local server availability
   useEffect(() => {
-    getAllProducts().then(setProducts).catch(() => {})
     fetchVelocity()
     fetchPosts(1, filters)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Connect to local server once probe resolves
   useEffect(() => {
     if (localAvailable !== true) return
     fetchStatus()
   }, [localAvailable]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Polling while running
   useEffect(() => {
     if (!localAvailable || !serverReachable) return
     clearInterval(pollRef.current)
@@ -214,7 +233,6 @@ export function ThreadsScraper() {
     return () => clearInterval(pollRef.current)
   }, [status.running, serverReachable, innerTab]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // SSE log stream
   useEffect(() => {
     if (!localAvailable || !serverReachable) return
     esRef.current?.close()
@@ -222,32 +240,34 @@ export function ThreadsScraper() {
     return () => esRef.current?.close()
   }, [serverReachable]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll logs to bottom
   useEffect(() => {
     if (logsOpen) logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [logs, logsOpen])
 
-  // Persist saved keywords to localStorage
   useEffect(() => {
     localStorage.setItem('threads_saved_keywords', JSON.stringify(savedKeywords))
   }, [savedKeywords])
 
-  // Keep refs in sync with state
+  useEffect(() => {
+    localStorage.setItem('threads_last_scraped_times', JSON.stringify(lastScrapedAt))
+  }, [lastScrapedAt])
+
   useEffect(() => { activeKeywordRef.current = activeKeyword }, [activeKeyword])
   useEffect(() => { runFrequencyRef.current = runFrequency }, [runFrequency])
 
-  // Persist run frequency
   useEffect(() => {
     localStorage.setItem('scraper_run_frequency', String(runFrequency))
   }, [runFrequency])
 
-  // When scraper transitions from running → stopped: refresh results and schedule next loop
   useEffect(() => {
     if (prevRunningRef.current && !status.running) {
       setPage(1)
       if (innerTab === 'feed') fetchPosts(1, filters, activeKeywordRef.current)
       else fetchVelocity()
-      setLastScrapedAt(prev => ({ ...prev, [loopTargetRef.current ?? '__home__']: new Date().toISOString() }))
+      setLastScrapedAt(prev => ({
+        ...prev,
+        [loopTargetRef.current ?? '__home__']: new Date().toISOString(),
+      }))
       if (!loopCancelledRef.current && runFrequencyRef.current > 0) {
         scheduleLoop(loopTargetRef.current, runFrequencyRef.current * 60 * 1000)
       }
@@ -255,7 +275,6 @@ export function ThreadsScraper() {
     prevRunningRef.current = status.running
   }, [status.running]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Refetch when tab or page changes
   useEffect(() => {
     if (innerTab === 'leaderboard') fetchVelocity()
     else fetchPosts(page, filters)
@@ -272,6 +291,13 @@ export function ThreadsScraper() {
       ? filters.mediaTypes.filter(t => t !== type)
       : [...filters.mediaTypes, type]
     applyFilters({ ...filters, mediaTypes: next })
+  }
+
+  function toggleScraperId(id) {
+    const next = filters.scraperIds.includes(id)
+      ? filters.scraperIds.filter(s => s !== id)
+      : [...filters.scraperIds, id]
+    applyFilters({ ...filters, scraperIds: next })
   }
 
   function addKeyword(kw) {
@@ -345,73 +371,69 @@ export function ThreadsScraper() {
         if (target) await startKeywordSearch(target)
         else await startScraper()
         await fetchStatus()
-      } catch {}
+      } catch { }
       finally { setActionLoading(false) }
     }, delayMs)
   }
 
-  function handlePostAs(post, productId) {
-    navigate(`/studio/${productId}`, { state: { angle: post.text } })
-    setOpenPicker(null)
-  }
-
-  function handlePostAction(post) {
-    if (products.length === 0) return
-    if (products.length === 1) return handlePostAs(post, products[0].id)
-    setOpenPicker(prev => prev === post.post_id ? null : post.post_id)
-  }
-
   const controlAvailable = localAvailable === true && serverReachable === true
+  const activeKey = activeKeyword ?? '__home__'
+  const lastScrapeIso = lastScrapedAt[activeKey]
+  const scrapeIsStale = lastScrapeIso && (Date.now() - new Date(lastScrapeIso)) / 60000 > 120
+  const activeFiltersCount = (filters.author ? 1 : 0) + (filters.minLikes > 0 ? 1 : 0)
+  const canStartScraper = controlAvailable && !status.running && loopSecondsLeft === null
 
   return (
     <div className="sc-content">
-      {/* Control bar — only shown when local scraper server is reachable */}
-      {controlAvailable && <div className="sc-control-bar">
-        <div className="sc-status">
-          <span className={`sc-dot ${status.running ? 'sc-dot-running' : loopSecondsLeft !== null ? 'sc-dot-loop' : 'sc-dot-idle'}`} />
-          <span className="sc-status-label">
-            {status.running
-              ? (loopTarget !== null ? `Scraping: "${loopTarget}"` : 'Running')
-              : loopSecondsLeft !== null
-                ? `Next run in ${formatCountdown(loopSecondsLeft)}${loopTarget ? ` · "${loopTarget}"` : ''}`
-                : 'Idle'}
-          </span>
-        </div>
-        <div className="sc-control-actions">
-          <div className="sc-freq-group">
-            {FREQUENCIES.map(f => (
-              <button
-                key={f.value}
-                className={`sc-freq-btn${runFrequency === f.value ? ' sc-freq-btn-active' : ''}`}
-                onClick={() => setRunFrequency(f.value)}
-                disabled={status.running || loopSecondsLeft !== null}
-                title={f.value === 0 ? 'Run once' : `Repeat every ${f.label}`}
-              >
-                {f.label}
-              </button>
-            ))}
+
+      {/* Control bar — local server only */}
+      {controlAvailable && (
+        <div className="sc-control-bar">
+          <div className="sc-status">
+            <span className={`sc-dot ${status.running ? 'sc-dot-running' : loopSecondsLeft !== null ? 'sc-dot-loop' : 'sc-dot-idle'}`} />
+            <span className="sc-status-label">
+              {status.running
+                ? (loopTarget !== null ? `Scraping: "${loopTarget}"` : 'Running')
+                : loopSecondsLeft !== null
+                  ? `Next run in ${formatCountdown(loopSecondsLeft)}${loopTarget ? ` · "${loopTarget}"` : ''}`
+                  : 'Idle'}
+            </span>
           </div>
-          {status.running ? (
-            <button className="sc-stop-btn" onClick={handleStop} disabled={actionLoading}>
-              {actionLoading ? 'Stopping…' : 'Stop'}
+          <div className="sc-control-actions">
+            <div className="sc-freq-group">
+              {FREQUENCIES.map(f => (
+                <button
+                  key={f.value}
+                  className={`sc-freq-btn${runFrequency === f.value ? ' sc-freq-btn-active' : ''}`}
+                  onClick={() => setRunFrequency(f.value)}
+                  disabled={status.running || loopSecondsLeft !== null}
+                  title={f.value === 0 ? 'Run once' : `Repeat every ${f.label}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {status.running ? (
+              <button className="sc-stop-btn" onClick={handleStop} disabled={actionLoading}>
+                {actionLoading ? 'Stopping…' : 'Stop'}
+              </button>
+            ) : loopSecondsLeft !== null ? (
+              <button className="sc-cancel-btn" onClick={handleCancelLoop}>Cancel loop</button>
+            ) : (
+              <button className="sc-start-btn" onClick={handleStart} disabled={actionLoading}>
+                {actionLoading ? 'Starting…' : activeKeyword ? `Start scraper: ${activeKeyword}` : 'Start scraper'}
+              </button>
+            )}
+            <button
+              className={`sc-log-toggle${logsOpen ? ' sc-log-toggle-open' : ''}`}
+              onClick={() => setLogsOpen(v => !v)}
+              title="View scraper logs"
+            >
+              Logs {logs.length > 0 && <span className="sc-log-count">{logs.length}</span>}
             </button>
-          ) : loopSecondsLeft !== null ? (
-            <button className="sc-cancel-btn" onClick={handleCancelLoop}>
-              Cancel loop
-            </button>
-          ) : (
-            <button className="sc-start-btn" onClick={handleStart} disabled={actionLoading}>
-              {actionLoading ? 'Starting…' : activeKeyword ? `Start scraper: ${activeKeyword}` : 'Start scraper'}
-            </button>
-          )}
-          <button
-            className={`sc-log-toggle${logsOpen ? ' sc-log-toggle-open' : ''}`}
-            onClick={() => setLogsOpen(v => !v)}
-          >
-            Logs {logs.length > 0 && <span className="sc-log-count">{logs.length}</span>}
-          </button>
+          </div>
         </div>
-      </div>}
+      )}
 
       {/* No-server notice */}
       {localAvailable === false && (
@@ -435,169 +457,87 @@ export function ThreadsScraper() {
         </div>
       )}
 
-      {/* Inner tabs */}
+      {/* Tabs */}
       <div className="sc-inner-tabs">
-        <button
-          className={`sc-inner-tab${innerTab === 'leaderboard' ? ' sc-inner-tab-active' : ''}`}
-          onClick={() => setInnerTab('leaderboard')}
-        >
-          Leaderboard
-        </button>
         <button
           className={`sc-inner-tab${innerTab === 'feed' ? ' sc-inner-tab-active' : ''}`}
           onClick={() => setInnerTab('feed')}
         >
           Feed
         </button>
+        <button
+          className={`sc-inner-tab${innerTab === 'leaderboard' ? ' sc-inner-tab-active' : ''}`}
+          onClick={() => setInnerTab('leaderboard')}
+        >
+          Leaderboard
+        </button>
       </div>
 
-      {/* Leaderboard */}
-      {innerTab === 'leaderboard' && (
-        <div className="sc-leaderboard">
-          {velocity.length === 0 ? (
-            <div className="sc-empty">
-              <p>No velocity data yet.</p>
-              <p className="sc-empty-hint">Viral score requires at least 2 scrape cycles. Start the scraper and wait for the second cycle.</p>
-            </div>
-          ) : (
-            <>
-              <p className="sc-lb-hint">
-                Posts gaining traction fastest in the last 6h — ranked by viral score, a weighted mix of how quickly likes, replies, and reposts are accumulating. Replies and reposts count more because they're the signals Threads amplifies most.
-              </p>
-              <div className="sc-lb-list">
-              {velocity.map((v, i) => (
-                <div key={v.post_id} className={`sc-lb-card ${velocityAgeClass(v)}${v.scraper_count > 1 ? ' sc-lb-card-crossbubble' : ''}`}>
-                  <span className="sc-lb-rank">#{i + 1}</span>
-                  <div className="sc-lb-body">
-                    <div className="sc-lb-meta">
-                      <span className="sc-lb-author">@{v.author_username}</span>
-                      <span className="sc-lb-age">{formatAge(v.minutes_old)}</span>
-                      {v.media_type && v.media_type !== 'TEXT' && (
-                        <span className={`sc-media-badge sc-media-badge-${v.media_type.toLowerCase()}`}>
-                          {v.media_type === 'IMAGE' ? 'img' : v.media_type === 'VIDEO' ? 'vid' : 'carousel'}
-                        </span>
-                      )}
-                      {v.scraper_count > 1 && (
-                        <span className="sc-crossbubble-badge">
-                          seen by {v.scraper_count} scrapers
-                        </span>
-                      )}
-                    </div>
-                    <p className="sc-lb-text">{v.text ? v.text.slice(0, 140) + (v.text.length > 140 ? '…' : '') : '[no text]'}</p>
-                    <div className="sc-lb-stats">
-                      <span className="sc-velocity">{v.composite_score.toFixed(2)} score</span>
-                      <span className="sc-stat">{formatCount(v.current_likes)} likes</span>
-                      <span className="sc-stat">{formatCount(v.current_replies)} replies</span>
-                      <span className="sc-stat">{formatCount(v.current_reposts)} reposts</span>
-                      <span className="sc-stat">{v.snapshot_count} snapshots</span>
-                      {(v.scrapers ?? []).map(s => (
-                        <span key={s} className="sc-scraper-chip">{s}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="sc-lb-actions">
-                    {v.permalink && (
-                      <a
-                        className="sc-post-btn"
-                        href={v.permalink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Go to →
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Feed */}
+      {/* ── Feed ─────────────────────────────────────────────────────── */}
       {innerTab === 'feed' && (
         <div className="sc-feed">
+
           {/* Keyword bar */}
           <div className="sc-keyword-bar">
-            <button
-              className={`sc-chip${activeKeyword === null ? ' sc-chip-active' : ''}`}
-              onClick={() => selectKeyword(null)}
-            >
-              Home feed
-            </button>
-            {savedKeywords.map(kw => (
-              <span key={kw} className="sc-keyword-chip-wrap">
+            <div className="sc-keyword-chips">
+              <button
+                className={`sc-chip${activeKeyword === null ? ' sc-chip-active' : ''}`}
+                onClick={() => selectKeyword(null)}
+              >
+                Home feed
+              </button>
+              {savedKeywords.map(kw => (
+                <span key={kw} className="sc-keyword-chip-wrap">
+                  <button
+                    className={`sc-chip${activeKeyword === kw ? ' sc-chip-active' : ''}`}
+                    onClick={() => selectKeyword(kw)}
+                    title={kw}
+                  >
+                    {kw}
+                  </button>
+                  <button
+                    className="sc-keyword-remove"
+                    onClick={() => removeKeyword(kw)}
+                    title={`Remove "${kw}"`}
+                  >×</button>
+                </span>
+              ))}
+              <form
+                className="sc-keyword-add-form"
+                onSubmit={e => { e.preventDefault(); addKeyword(keywordInput); setKeywordInput('') }}
+              >
+                <input
+                  className="sc-filter-input sc-keyword-input"
+                  type="text"
+                  placeholder="+ Add keyword…"
+                  value={keywordInput}
+                  onChange={e => setKeywordInput(e.target.value)}
+                />
+              </form>
+            </div>
+            <div className="sc-keyword-right">
+              {lastScrapeIso && (
+                <span className={`sc-freshness-badge${scrapeIsStale ? ' sc-freshness-stale' : ''}`}>
+                  Last scraped {timeAgo(lastScrapeIso)}
+                </span>
+              )}
+              {canStartScraper && (
                 <button
-                  className={`sc-chip${activeKeyword === kw ? ' sc-chip-active' : ''}`}
-                  onClick={() => selectKeyword(kw)}
-                  title={kw}
+                  className="sc-scrape-now-btn"
+                  onClick={handleStart}
+                  disabled={actionLoading}
+                  title={activeKeyword ? `Scrape "${activeKeyword}" now` : 'Scrape home feed now'}
                 >
-                  {kw}
+                  ↻ Scrape now
                 </button>
-                <button
-                  className="sc-keyword-remove"
-                  onClick={() => removeKeyword(kw)}
-                  title={`Remove "${kw}"`}
-                >×</button>
-              </span>
-            ))}
-            <form
-              className="sc-keyword-add-form"
-              onSubmit={e => { e.preventDefault(); addKeyword(keywordInput); setKeywordInput('') }}
-            >
-              <input
-                className="sc-filter-input sc-keyword-input"
-                type="text"
-                placeholder="+ Add keyword…"
-                value={keywordInput}
-                onChange={e => setKeywordInput(e.target.value)}
-              />
-            </form>
-            {lastScrapedAt[activeKeyword ?? '__home__'] && (
-              <span className="sc-last-scraped">
-                last scraped {timeAgo(lastScrapedAt[activeKeyword ?? '__home__'])}
-              </span>
-            )}
+              )}
+            </div>
           </div>
 
+          {/* Filter bar */}
+          <div className="sc-filter-tray">
           <div className="sc-filters">
-            <input
-              className="sc-filter-input"
-              type="text"
-              placeholder="Filter by author…"
-              value={filters.author}
-              onChange={e => applyFilters({ ...filters, author: e.target.value })}
-            />
-            <input
-              className="sc-filter-input sc-filter-num"
-              type="number"
-              placeholder="Min likes"
-              min={0}
-              value={filters.minLikes || ''}
-              onChange={e => applyFilters({ ...filters, minLikes: parseInt(e.target.value) || 0 })}
-            />
-            <span className="sc-filter-sep" />
-            <div className="sc-filter-group">
-              <span className="sc-filter-label">Sort</span>
-              <div className="sc-filter-chips">
-                <button
-                  className={`sc-chip${filters.sortBy === 'scraped' ? ' sc-chip-active' : ''}`}
-                  onClick={() => applyFilters({ ...filters, sortBy: 'scraped' })}
-                  title="Order by when the post was scraped"
-                >
-                  Scraped
-                </button>
-                <button
-                  className={`sc-chip${filters.sortBy === 'posted' ? ' sc-chip-active' : ''}`}
-                  onClick={() => applyFilters({ ...filters, sortBy: 'posted' })}
-                  title="Order by when the post was published"
-                >
-                  Posted
-                </button>
-              </div>
-            </div>
-            <span className="sc-filter-sep" />
+            {/* Time window */}
             <div className="sc-filter-chips">
               {TIME_WINDOWS.map(tw => (
                 <button
@@ -610,55 +550,117 @@ export function ThreadsScraper() {
               ))}
             </div>
             <span className="sc-filter-sep" />
-            <div className="sc-filter-group">
-              <span className="sc-filter-label">Media</span>
-              <div className="sc-filter-chips">
+            {/* Sort */}
+            <div className="sc-sort-group">
+              {SORT_OPTIONS.map(s => (
                 <button
-                  className={`sc-chip${filters.mediaTypes.length === 0 ? ' sc-chip-active' : ''}`}
-                  onClick={() => applyFilters({ ...filters, mediaTypes: [] })}
+                  key={s.value}
+                  className={`sc-sort-btn${filters.sortBy === s.value ? ' sc-sort-btn-active' : ''}`}
+                  onClick={() => applyFilters({ ...filters, sortBy: s.value })}
+                  title={s.title}
                 >
-                  All
+                  {s.label}
                 </button>
-                {MEDIA_TYPES.map(mt => (
-                  <button
-                    key={mt.value}
-                    className={`sc-chip${filters.mediaTypes.includes(mt.value) ? ' sc-chip-active' : ''}`}
-                    onClick={() => toggleMediaType(mt.value)}
-                  >
-                    {mt.label}
-                  </button>
-                ))}
-              </div>
+              ))}
             </div>
+            <span className="sc-filter-sep" />
+            {/* Media */}
+            <div className="sc-filter-chips">
+              <button
+                className={`sc-chip${filters.mediaTypes.length === 0 ? ' sc-chip-active' : ''}`}
+                onClick={() => applyFilters({ ...filters, mediaTypes: [] })}
+              >
+                All
+              </button>
+              {MEDIA_TYPES.map(mt => (
+                <button
+                  key={mt.value}
+                  className={`sc-chip${filters.mediaTypes.includes(mt.value) ? ' sc-chip-active' : ''}`}
+                  onClick={() => toggleMediaType(mt.value)}
+                >
+                  {mt.label}
+                </button>
+              ))}
+            </div>
+            <span className="sc-filter-sep" />
+            {/* Scrapers dropdown */}
             {availableScrapers.length > 0 && (
-              <div className="sc-filter-group">
-                <span className="sc-filter-label">Scrapers</span>
-                <div className="sc-filter-chips">
-                  <button
-                    className={`sc-chip${filters.scraperIds.length === 0 ? ' sc-chip-active' : ''}`}
-                    onClick={() => applyFilters({ ...filters, scraperIds: [] })}
-                  >
-                    All
-                  </button>
-                  {availableScrapers.map(id => (
+              <div className="sc-dropdown-wrap" ref={scrapersDropdownRef}>
+                <button
+                  className={`sc-dropdown-btn${filters.scraperIds.length > 0 ? ' sc-dropdown-btn-active' : ''}`}
+                  onClick={() => setShowScrapersDropdown(v => !v)}
+                >
+                  Scrapers{filters.scraperIds.length > 0 ? ` (${filters.scraperIds.length})` : ''} ▾
+                </button>
+                {showScrapersDropdown && (
+                  <div className="sc-dropdown-panel">
                     <button
-                      key={id}
-                      className={`sc-chip${filters.scraperIds.includes(id) ? ' sc-chip-active' : ''}`}
-                      onClick={() => {
-                        const next = filters.scraperIds.includes(id)
-                          ? filters.scraperIds.filter(s => s !== id)
-                          : [...filters.scraperIds, id]
-                        applyFilters({ ...filters, scraperIds: next })
-                      }}
+                      className={`sc-dropdown-item${filters.scraperIds.length === 0 ? ' sc-dropdown-item-active' : ''}`}
+                      onClick={() => { applyFilters({ ...filters, scraperIds: [] }); setShowScrapersDropdown(false) }}
                     >
-                      {id}
+                      All scrapers
                     </button>
-                  ))}
-                </div>
+                    <div className="sc-dropdown-divider" />
+                    {availableScrapers.map(id => (
+                      <label key={id} className="sc-dropdown-item sc-dropdown-check">
+                        <input
+                          type="checkbox"
+                          checked={filters.scraperIds.includes(id)}
+                          onChange={() => toggleScraperId(id)}
+                        />
+                        {id}
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
+            {/* Extra filters popover */}
+            <div className="sc-dropdown-wrap" ref={filtersPopoverRef}>
+              <button
+                className={`sc-dropdown-btn${activeFiltersCount > 0 ? ' sc-dropdown-btn-active' : ''}`}
+                onClick={() => setShowFiltersPopover(v => !v)}
+              >
+                Filters{activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ''} ▾
+              </button>
+              {showFiltersPopover && (
+                <div className="sc-dropdown-panel sc-filters-panel">
+                  <div className="sc-popover-field">
+                    <label className="sc-popover-label">Author</label>
+                    <input
+                      className="sc-filter-input"
+                      type="text"
+                      placeholder="Filter by handle…"
+                      value={filters.author}
+                      onChange={e => applyFilters({ ...filters, author: e.target.value })}
+                    />
+                  </div>
+                  <div className="sc-popover-field">
+                    <label className="sc-popover-label">Min likes</label>
+                    <input
+                      className="sc-filter-input sc-filter-num"
+                      type="number"
+                      placeholder="0"
+                      min={0}
+                      value={filters.minLikes || ''}
+                      onChange={e => applyFilters({ ...filters, minLikes: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                  {activeFiltersCount > 0 && (
+                    <button
+                      className="sc-popover-clear"
+                      onClick={() => applyFilters({ ...filters, author: '', minLikes: 0 })}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
           </div>
 
+          {/* Scraping banner */}
           {status.running && (
             <div className="sc-scraping-banner">
               <span className="sc-scraping-pulse" />
@@ -666,12 +668,14 @@ export function ThreadsScraper() {
             </div>
           )}
 
+          {/* Loading skeletons */}
           {loading && posts.length === 0 && (
             <div className="sc-loading-grid">
               {Array.from({ length: 4 }).map((_, i) => <div key={i} className="sc-skeleton" />)}
             </div>
           )}
 
+          {/* Older posts hidden banner */}
           {!loading && filteredOutCount > 0 && posts.length > 0 && (
             <div className="sc-filtered-banner">
               {filteredOutCount} older post{filteredOutCount !== 1 ? 's' : ''} hidden by the {filters.timeWindow}h window —{' '}
@@ -679,6 +683,7 @@ export function ThreadsScraper() {
             </div>
           )}
 
+          {/* Empty state */}
           {!loading && posts.length === 0 && (
             <div className="sc-empty">
               <p>No posts found.</p>
@@ -693,51 +698,64 @@ export function ThreadsScraper() {
             </div>
           )}
 
+          {/* Post list */}
           <div className="sc-post-list">
-            {posts.map(post => (
-              <div key={post.post_id} className={`sc-post-card ${postAgeClass(post)}`}>
-                <div className="sc-post-meta">
-                  <span className="sc-post-author">@{post.author_username}</span>
-                  <span className="sc-post-time">{post.created_at > 0 ? timeAgo(new Date(post.created_at * 1000).toISOString()) : timeAgo(post.first_seen_at)}</span>
-                  <span className="sc-post-scraped">
-                    scraped {formatScrapedAt(post.first_seen_at)}
-                    {post.scraper_user_id && <span className="sc-post-scraper-id">{post.scraper_user_id}</span>}
-                  </span>
-                </div>
-                <p className="sc-post-text">{post.text || '[no text]'}</p>
-                <div className="sc-post-footer">
-                  <div className="sc-post-stats">
-                    <span>{formatCount(post.like_count)} likes</span>
-                    <span>{formatCount(post.reply_count)} replies</span>
-                    <span>{formatCount(post.repost_count)} reposts</span>
-                    {post.media_type && post.media_type !== 'TEXT' && (
-                      <span className={`sc-media-badge sc-media-badge-${post.media_type.toLowerCase()}`}>
-                        {post.media_type === 'IMAGE' ? 'img' : post.media_type === 'VIDEO' ? 'vid' : 'carousel'}
-                      </span>
+            {posts.map(post => {
+              const postedLabel = post.created_at > 0
+                ? timeAgo(new Date(post.created_at * 1000).toISOString())
+                : timeAgo(post.first_seen_at)
+              const tooltipText = [
+                post.created_at > 0
+                  ? `Posted: ${new Date(post.created_at * 1000).toLocaleString()}`
+                  : null,
+                `Scraped: ${formatScrapedAt(post.first_seen_at)}`,
+                post.scraper_user_id ? `By: ${post.scraper_user_id}` : null,
+              ].filter(Boolean).join(' · ')
+
+              return (
+                <div
+                  key={post.post_id}
+                  className={`sc-post-card ${postAgeClass(post)}`}
+                  title={postAgeClass(post) === 'sc-age-live' ? 'Live (< 6h)' : postAgeClass(post) === 'sc-age-day' ? 'Today (< 24h)' : 'Older (24h+)'}
+                >
+                  <div className="sc-post-meta">
+                    <span
+                      className="sc-post-author"
+                      title={post.scraper_user_id ? `Scraped by ${post.scraper_user_id}` : undefined}
+                    >
+                      @{post.author_username}
+                    </span>
+                    <span className="sc-post-time" title={tooltipText}>
+                      {postedLabel}
+                    </span>
+                  </div>
+                  <p className="sc-post-text">{post.text || '[no text]'}</p>
+                  <div className="sc-post-footer">
+                    <div className="sc-post-stats">
+                      <span>{formatCount(post.like_count)} likes</span>
+                      <span>{formatCount(post.reply_count)} replies</span>
+                      <span>{formatCount(post.repost_count)} reposts</span>
+                      {post.media_type && post.media_type !== 'TEXT' && (
+                        <span className={`sc-media-badge sc-media-badge-${post.media_type.toLowerCase()}`}>
+                          {post.media_type === 'IMAGE' ? 'img' : post.media_type === 'VIDEO' ? 'vid' : 'carousel'}
+                        </span>
+                      )}
+                    </div>
+                    {post.permalink && (
+                      <a className="sc-post-btn" href={post.permalink} target="_blank" rel="noopener noreferrer">
+                        Go to →
+                      </a>
                     )}
                   </div>
-                  {post.permalink && (
-                    <a
-                      className="sc-post-btn"
-                      href={post.permalink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Go to →
-                    </a>
-                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
+          {/* Pagination */}
           {total > LIMIT && (
             <div className="sc-pagination">
-              <button
-                className="sc-page-btn"
-                disabled={page === 1}
-                onClick={() => setPage(p => p - 1)}
-              >
+              <button className="sc-page-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
                 ← Prev
               </button>
               <span className="sc-page-info">Page {page} of {Math.ceil(total / LIMIT)}</span>
@@ -748,6 +766,60 @@ export function ThreadsScraper() {
               >
                 Next →
               </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Leaderboard ──────────────────────────────────────────────── */}
+      {innerTab === 'leaderboard' && (
+        <div className="sc-leaderboard">
+          {velocity.length === 0 ? (
+            <div className="sc-empty">
+              <p>No velocity data yet.</p>
+              <p className="sc-empty-hint">Viral score requires at least 2 scrape cycles. Start the scraper and wait for the second cycle.</p>
+            </div>
+          ) : (
+            <div className="sc-lb-list">
+              {velocity.map((v, i) => (
+                <div key={v.post_id} className={`sc-lb-card ${velocityAgeClass(v)}${v.scraper_count > 1 ? ' sc-lb-card-crossbubble' : ''}`}>
+                  <span className="sc-lb-rank">#{i + 1}</span>
+                  <div className="sc-lb-body">
+                    <div className="sc-lb-meta">
+                      <span className="sc-lb-author">@{v.author_username}</span>
+                      <span className="sc-lb-age">{formatAge(v.minutes_old)}</span>
+                      {v.media_type && v.media_type !== 'TEXT' && (
+                        <span className={`sc-media-badge sc-media-badge-${v.media_type.toLowerCase()}`}>
+                          {v.media_type === 'IMAGE' ? 'img' : v.media_type === 'VIDEO' ? 'vid' : 'carousel'}
+                        </span>
+                      )}
+                      {v.scraper_count > 1 && (
+                        <span className="sc-crossbubble-badge">seen by {v.scraper_count} scrapers</span>
+                      )}
+                    </div>
+                    <p className="sc-lb-text">
+                      {v.text ? v.text.slice(0, 140) + (v.text.length > 140 ? '…' : '') : '[no text]'}
+                    </p>
+                    <div className="sc-lb-stats">
+                      <span className="sc-velocity">{v.composite_score.toFixed(2)} score</span>
+                      <span className="sc-stat">{formatCount(v.current_likes)} likes</span>
+                      <span className="sc-stat">{formatCount(v.current_replies)} replies</span>
+                      <span className="sc-stat">{formatCount(v.current_reposts)} reposts</span>
+                      <span className="sc-stat">{v.snapshot_count} snapshots</span>
+                      {(v.scrapers ?? []).map(s => (
+                        <span key={s} className="sc-scraper-chip">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="sc-lb-actions">
+                    {v.permalink && (
+                      <a className="sc-post-btn" href={v.permalink} target="_blank" rel="noopener noreferrer">
+                        Go to →
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

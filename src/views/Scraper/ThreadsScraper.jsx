@@ -416,7 +416,8 @@ export function ThreadsScraper() {
       {/* No-server notice */}
       {localAvailable === false && (
         <div className="sc-no-server-notice">
-          No local scraper running — Start/Stop unavailable. Showing shared data from Supabase.
+          No local scraper detected — Start/Stop unavailable. Showing shared data from Supabase.
+          {' '}If your scraper is running, open this page in <strong>Chrome</strong> (Safari blocks local server connections from HTTPS).
         </div>
       )}
 

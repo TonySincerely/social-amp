@@ -99,7 +99,7 @@ export function ThreadsScraper() {
   const [localAvailable, setLocalAvailable] = useState(null) // null=probing, true=found, false=not found
   const [serverReachable, setServerReachable] = useState(null)
   const [status, setStatus] = useState({ running: false, pid: null, keyword: null })
-  const [innerTab, setInnerTab] = useState('leaderboard')
+  const [innerTab, setInnerTab] = useState('feed')
   const [velocity, setVelocity] = useState([])
   const [posts, setPosts] = useState([])
   const [total, setTotal] = useState(0)

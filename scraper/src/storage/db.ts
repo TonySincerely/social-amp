@@ -55,7 +55,12 @@ export async function savePosts(
     .from('threads_posts')
     .upsert(rows, { onConflict: 'post_id' });
 
-  if (error) throw new Error(`savePosts: ${error.message}`);
+  if (error) {
+    const hint = error.message.includes('row-level security')
+      ? ' — check that SUPABASE_SERVICE_KEY in scraper/.env is the service_role key, not the anon key'
+      : ''
+    throw new Error(`savePosts: ${error.message}${hint}`)
+  }
 
   // Record sighting — one row per (post, scraper); safe to upsert every cycle
   const sightings = rows.map(r => ({

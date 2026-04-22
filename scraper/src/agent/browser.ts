@@ -40,17 +40,9 @@ export async function isLoggedIn(page: Page): Promise<boolean> {
     return false;
   }
 
-  // Confirm feed content is present, not just a splash/marketing page
-  try {
-    await page.waitForSelector('article, [role="feed"], [data-pressable-container=true]', {
-      timeout: 8000,
-    });
-    // Extra check: nav must exist (logged-in layout), not just marketing content
-    const hasNav = await page.$('nav') !== null;
-    return hasNav;
-  } catch {
-    return false;
-  }
+  // Guest view always injects an Instagram login button — definitive not-logged-in signal
+  const hasLoginPrompt = await page.$('a[href*="instagram.com"]') !== null;
+  return !hasLoginPrompt;
 }
 
 /**

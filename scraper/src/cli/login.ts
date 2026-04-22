@@ -6,7 +6,7 @@
  * Usage: npm run login
  */
 
-import { launchBrowser, isLoggedIn, waitForManualLogin } from '../agent/browser';
+import { launchBrowser } from '../agent/browser';
 import { CONFIG } from '../config';
 
 async function main() {
@@ -16,17 +16,19 @@ async function main() {
   const { context, page } = await launchBrowser(false); // headful
 
   try {
-    // Check if already logged in
-    const alreadyLoggedIn = await isLoggedIn(page);
-    if (alreadyLoggedIn) {
-      console.log('✅ Already logged in! Session is valid.\n');
-      console.log('   Press Enter to close the browser...');
-      await new Promise<void>((resolve) => { process.stdin.once('data', () => resolve()); });
-    } else {
-      await waitForManualLogin(page);
-      console.log('   Session saved. You can close this window.');
-      console.log('   Next step: npm run test-scrape');
-    }
+    await page.goto(CONFIG.THREADS_HOME, { waitUntil: 'domcontentloaded' });
+
+    console.log('   Check the browser window.');
+    console.log('   Not logged in? Log in now, then come back here.\n');
+    console.log('   Logged in and can see your feed?');
+    console.log('   Press Enter to confirm  |  Ctrl+C to abort\n');
+
+    await new Promise<void>(resolve => {
+      process.stdin.once('data', () => { process.stdin.destroy(); resolve(); });
+    });
+
+    console.log('✅ Session confirmed. You\'re all set.\n');
+    console.log('   Next step: npm run scraper:server');
   } finally {
     await context.close();
   }

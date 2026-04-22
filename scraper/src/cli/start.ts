@@ -8,7 +8,7 @@
  *   MAX_INTERVAL=15   Maximum minutes between cycles (default: 15)
  */
 
-import { launchBrowser, isLoggedIn, randomDelay } from '../agent/browser';
+import { launchBrowser, randomDelay } from '../agent/browser';
 import { scrapeFeed, setupCounterInterceptor } from '../agent/scraper';
 import { savePosts, saveSnapshots, closeDb } from '../storage/db';
 import { CONFIG } from '../config';
@@ -27,15 +27,6 @@ async function main() {
   console.log(`   Storage: Supabase (${process.env.SUPABASE_URL})\n`);
 
   const { context, page } = await launchBrowser(HEADLESS);
-
-  console.log('⏳ Verifying login...');
-  const loggedIn = await isLoggedIn(page);
-  if (!loggedIn) {
-    console.error('❌ Not logged in. Run `npm run login` first.');
-    await context.close();
-    return;
-  }
-  console.log('✅ Logged in.\n');
 
   const interceptor = setupCounterInterceptor(page);
 

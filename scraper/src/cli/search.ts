@@ -7,7 +7,7 @@
  *   SCROLL_COUNT=3   Number of scrolls (default: 3)
  */
 
-import { launchBrowser, isLoggedIn, navigateToSearch } from '../agent/browser';
+import { launchBrowser, navigateToSearch } from '../agent/browser';
 import { scrapeFeed, setupCounterInterceptor } from '../agent/scraper';
 import { savePosts, saveSnapshots, closeDb } from '../storage/db';
 
@@ -26,15 +26,6 @@ async function main() {
   console.log(`   Storage: Supabase (${process.env.SUPABASE_URL})\n`);
 
   const { context, page } = await launchBrowser(HEADLESS);
-
-  console.log('⏳ Verifying login...');
-  const loggedIn = await isLoggedIn(page);
-  if (!loggedIn) {
-    console.error('❌ Not logged in. Run `npm run scraper:login` first.');
-    await context.close();
-    process.exit(1);
-  }
-  console.log('✅ Logged in.\n');
 
   const interceptor = setupCounterInterceptor(page);
 

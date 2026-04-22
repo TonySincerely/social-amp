@@ -9,6 +9,12 @@ import {
   getThreadsPosts,
   getThreadsVelocity,
 } from '../../services/threads'
+import {
+  getKeywords,
+  addKeyword as addKeywordToDb,
+  deleteKeyword as deleteKeywordFromDb,
+  hidePost as hidePostInDb,
+} from '../../services/storage'
 
 const TIME_WINDOWS = [
   { label: 'Live · 6h', value: 6 },
@@ -118,10 +124,7 @@ export function ThreadsScraper() {
   const [showScrapersDropdown, setShowScrapersDropdown] = useState(false)
   const [showFiltersPopover, setShowFiltersPopover] = useState(false)
 
-  const [savedKeywords, setSavedKeywords] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('threads_saved_keywords') || '[]') }
-    catch { return [] }
-  })
+  const [savedKeywords, setSavedKeywords] = useState([])
   const [activeKeyword, setActiveKeyword] = useState(null)
   const [keywordInput, setKeywordInput] = useState('')
   const [runFrequency, setRunFrequency] = useState(() =>
@@ -213,6 +216,7 @@ export function ThreadsScraper() {
   useEffect(() => {
     fetchVelocity()
     fetchPosts(1, filters)
+    getKeywords().then(setSavedKeywords).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -243,10 +247,6 @@ export function ThreadsScraper() {
   useEffect(() => {
     if (logsOpen) logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [logs, logsOpen])
-
-  useEffect(() => {
-    localStorage.setItem('threads_saved_keywords', JSON.stringify(savedKeywords))
-  }, [savedKeywords])
 
   useEffect(() => {
     localStorage.setItem('threads_last_scraped_times', JSON.stringify(lastScrapedAt))
@@ -304,15 +304,26 @@ export function ThreadsScraper() {
     const trimmed = kw.trim()
     if (!trimmed || savedKeywords.includes(trimmed)) return
     setSavedKeywords(prev => [...prev, trimmed])
+    addKeywordToDb(trimmed).catch(() => {
+      setSavedKeywords(prev => prev.filter(k => k !== trimmed))
+    })
   }
 
   function removeKeyword(kw) {
     setSavedKeywords(prev => prev.filter(k => k !== kw))
+    deleteKeywordFromDb(kw).catch(() => {})
     if (activeKeyword === kw) {
       setActiveKeyword(null)
       setPage(1)
       fetchPosts(1, filters, null)
     }
+  }
+
+  async function handleHidePost(postId) {
+    if (!window.confirm('Hide this post for everyone on the team?')) return
+    setPosts(prev => prev.filter(p => p.post_id !== postId))
+    setVelocity(prev => prev.filter(v => v.post_id !== postId))
+    await hidePostInDb(postId)
   }
 
   function selectKeyword(kw) {
@@ -741,11 +752,20 @@ export function ThreadsScraper() {
                         </span>
                       )}
                     </div>
-                    {post.permalink && (
-                      <a className="sc-post-btn" href={post.permalink} target="_blank" rel="noopener noreferrer">
-                        Go to →
-                      </a>
-                    )}
+                    <div className="sc-post-actions">
+                      <button
+                        className="sc-hide-btn"
+                        onClick={() => handleHidePost(post.post_id)}
+                        title="Hide for the whole team"
+                      >
+                        Hide
+                      </button>
+                      {post.permalink && (
+                        <a className="sc-post-btn" href={post.permalink} target="_blank" rel="noopener noreferrer">
+                          Go to →
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
@@ -812,6 +832,13 @@ export function ThreadsScraper() {
                     </div>
                   </div>
                   <div className="sc-lb-actions">
+                    <button
+                      className="sc-hide-btn"
+                      onClick={() => handleHidePost(v.post_id)}
+                      title="Hide for the whole team"
+                    >
+                      Hide
+                    </button>
                     {v.permalink && (
                       <a className="sc-post-btn" href={v.permalink} target="_blank" rel="noopener noreferrer">
                         Go to →

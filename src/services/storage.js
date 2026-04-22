@@ -150,6 +150,31 @@ export async function getAllTrendSnapshots() {
   return data.map(r => r.data)
 }
 
+// ─── Threads Keywords ─────────────────────────────────────────────────────────
+
+export async function getKeywords() {
+  const { data, error } = await supabase.from('threads_keywords').select('keyword').order('created_at')
+  if (error) throw error
+  return data.map(r => r.keyword)
+}
+
+export async function addKeyword(keyword) {
+  const { error } = await supabase
+    .from('threads_keywords')
+    .upsert({ keyword }, { onConflict: 'keyword', ignoreDuplicates: true })
+  if (error) throw error
+}
+
+export async function deleteKeyword(keyword) {
+  const { error } = await supabase.from('threads_keywords').delete().eq('keyword', keyword)
+  if (error) throw error
+}
+
+export async function hidePost(postId) {
+  const { error } = await supabase.rpc('hide_post', { p_post_id: postId })
+  if (error) throw error
+}
+
 // ─── LocalStorage helpers ─────────────────────────────────────────────────────
 
 export function setLocalData(key, value) {

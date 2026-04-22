@@ -1103,6 +1103,31 @@
   position: relative;
 }
 
+.sc-post-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sc-hide-btn {
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink-3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.sc-hide-btn:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
 .sc-post-btn {
   padding: 5px 12px;
   background: var(--surface-2);

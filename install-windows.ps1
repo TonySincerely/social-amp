@@ -76,7 +76,7 @@ if (Test-Path $envFile) {
     Write-Host ''
     $supabaseUrl = Read-Host '  Supabase URL'
     $serviceKey  = Read-Host '  Supabase Service Key'
-    $scraperId   = Read-Host '  Your name (e.g. alice)'
+    $scraperId   = Read-Host '  Your name (e.g. zack)'
     $envContent  = "SUPABASE_URL=$supabaseUrl`nSUPABASE_SERVICE_KEY=$serviceKey`nSCRAPER_USER_ID=$scraperId"
     [System.IO.File]::WriteAllText($envFile, $envContent, [System.Text.Encoding]::UTF8)
     Write-Host ''
@@ -90,9 +90,8 @@ Write-Host '  Log in to Threads'
 Write-Host '================================' -ForegroundColor Cyan
 Write-Host ''
 Write-Host '  A browser window will open.'
-Write-Host '  Log in to your Threads account, then close the browser.'
-Write-Host ''
-Read-Host '  Press Enter to open the browser'
+Write-Host '  Log in to your Threads account.'
+Write-Host '  Once you can see your feed, come back here and press Enter.'
 Write-Host ''
 Push-Location $ScraperDir
 npm run login

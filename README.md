@@ -289,8 +289,8 @@ The Scraper module collects real engagement data from your Threads home feed usi
 
 **Scraper view (`/scraper → Threads tab`):**
 - **Control bar** — only rendered when the local scraper server is reachable. Unified Start button (context-aware: `Start scraper` on home feed, `Start scraper: [keyword]` with a keyword active), frequency selector (`Once · 30m · 1h · 2h · 4h`, persisted in localStorage), Stop/Cancel loop, collapsible log panel (SSE stream from server stdout). Status dot: green pulse (running) / teal (loop countdown) / grey (idle). Status label shows countdown between runs: `Next run in 14m · "ai"`. When no local server is detected, a notice is shown and feed/leaderboard data still loads from Supabase.
-- **Feed tab** (default) — keyword bar + filter tray + paginated post cards. Each card shows the post's published time (hover reveals full posted time, scraped time, and scraper ID), text clamped to 3 lines, engagement counts, media type badge, and a coloured left border indicating content age (green < 6h, amber < 24h, orange 24h+). **Go to →** opens the post on Threads in a new tab.
-- **Leaderboard tab** — posts ranked by **viral score** (composite velocity across likes, replies ×2, reposts ×3) over a 6h window. Requires ≥2 scrape cycles. Each card shows the score, absolute engagement counts, media type badge, age-band left border, and a **Go to →** link.
+- **Feed tab** (default) — keyword bar + filter tray + paginated post cards. Each card shows the post's published time (hover reveals full posted time, scraped time, and scraper ID), text clamped to 3 lines, engagement counts, media type badge, and a coloured left border indicating content age (green < 6h, amber < 24h, orange 24h+). **Go to →** opens the post on Threads in a new tab. **Hide** removes the post team-wide (hidden posts are filtered at the database level for all users).
+- **Leaderboard tab** — posts ranked by **viral score** (composite velocity across likes, replies ×2, reposts ×3) over a 6h window. Requires ≥2 scrape cycles. Each card shows the score, absolute engagement counts, media type badge, age-band left border, a **Go to →** link, and a **Hide** button.
 - Control bar hidden when local scraper server is not reachable; feed and leaderboard still load from Supabase
 
 **Feed filters and sort:**
@@ -302,7 +302,7 @@ The filter tray groups all controls in a single contained row:
 - **Filters ▾** — popover with author (free-text handle filter) and min likes threshold. Active filter count shown on button.
 
 **Keyword search (Feed tab):**
-Type a keyword (e.g. `ai`, `政治`, `可愛`) in the `+ Add keyword…` input and press Enter to save it as a chip. Saved chips persist in localStorage (`threads_saved_keywords`). Chips are **view-only** — clicking switches which results you see without triggering a scrape. To scrape the active keyword, either hit **Start scraper: [keyword]** in the control bar or use the **↻ Scrape now** shortcut that appears inline in the keyword bar when the server is idle. Click **Home feed** to return to untagged home feed posts.
+Type a keyword (e.g. `ai`, `政治`, `可愛`) in the `+ Add keyword…` input and press Enter to save it as a chip. Saved chips are stored in Supabase (`threads_keywords` table) and shared across all team members — keywords added by one person appear for everyone. Chips are **view-only** — clicking switches which results you see without triggering a scrape. To scrape the active keyword, either hit **Start scraper: [keyword]** in the control bar or use the **↻ Scrape now** shortcut that appears inline in the keyword bar when the server is idle. Click **Home feed** to return to untagged home feed posts.
 
 **Data freshness:**
 A **Last scraped X ago** badge sits at the right of the keyword bar and turns amber when data is more than 2 hours old. The timestamp persists in localStorage (`threads_last_scraped_times`) so it survives page reloads. The feed refreshes automatically when a scrape cycle completes.
@@ -370,7 +370,7 @@ Constraints at positions 6–8 are placed last in the prompt to maximise adheren
 **Web app:**
 - **React 19 + Vite 7** — React Router v7
 - **State** — React Context (`AppContext` — API key modal + quick create drawer) + component `useState`
-- **Storage** — Supabase (products, accounts, calendar posts, trend snapshots, platform configs) · LocalStorage (API key, timezone, pulse starred/preferences)
+- **Storage** — Supabase (products, accounts, calendar posts, trend snapshots, platform configs, scraper keywords) · LocalStorage (API key, timezone, pulse starred/preferences, scraper frequency, last scraped timestamps)
 - **AI** — `@google/generative-ai` SDK — Gemini Flash / Pro with Google Search grounding for trend briefs and pulse snapshots; `gemini-2.5-flash-image` for post image generation
 - **Scheduling** — `src/services/planner.js` — pure JS, no AI calls
 - **Styling** — CSS custom properties (`src/styles/tokens.css`)
@@ -406,6 +406,13 @@ Constraints at positions 6–8 are placed last in the prompt to maximise adheren
 
 ### Supabase — threads tables
 
+**threads_keywords** — shared keyword list across all team members
+
+| Column | Notes |
+|--------|-------|
+| `keyword` | search keyword (PK) |
+| `created_at` | when the keyword was added |
+
 **threads_posts** — one row per unique Threads post
 
 | Column | Notes |
@@ -419,6 +426,7 @@ Constraints at positions 6–8 are placed last in the prompt to maximise adheren
 | `scraper_user_id` | which team member's scraper collected this post |
 | `keyword` | search keyword that produced this post; `NULL` for home feed posts |
 | `media_type` | `TEXT / IMAGE / VIDEO / CAROUSEL` — detected from DOM |
+| `hidden` | `true` if hidden by a team member — filtered out of feed and leaderboard for all users |
 | `like_count`, `reply_count`, `repost_count`, `reshare_count` | latest counts (updated on each scrape) |
 
 **threads_snapshots** — one row per engagement observation per post (used for velocity)
@@ -443,7 +451,7 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 
 ## Current status
 
-**Working as of 2026-04-21.**
+**Working as of 2026-04-22.**
 
 - Scraper login, post extraction, engagement counts, Supabase persistence — functional
 - Scraper control from browser UI (Start/Stop/Logs via SSE) — functional
@@ -466,8 +474,10 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 - Multi-scraper support: multiple team members scrape from their own Threads accounts; all data merges into the shared Supabase project
 - `better-sqlite3` removed — scraper writes directly to Supabase; no native compilation or Python required during `npm install`, works on Node 24
 - RLS error on `savePosts` now logs a clear hint to check `SUPABASE_SERVICE_KEY` (must be the service_role key, not the anon key)
-- Installer (`install-mac.command`): exits with error if `npm install` fails; login step now correctly instructs user to press Enter in Terminal after seeing their feed; login exit code checked with a warning if unverified
-- Login flow: `isLoggedIn` now requires the URL to match `threads.net/` root exactly and checks for a `nav` element to distinguish the logged-in feed from splash/marketing pages — prevents false-positive "already logged in" detection that previously closed the browser before the user could log in; verification after pressing Enter checks current page state without navigating away; "already logged in" branch now waits for Enter before closing so the browser doesn't vanish instantly
+- **Keyword sync** — saved keywords stored in Supabase (`threads_keywords`), shared across all team members and devices; requires `supabase/migrations/004_keywords_and_hide.sql`
+- **Hide post** — Hide button on feed and leaderboard cards; sets `hidden = true` via a `SECURITY DEFINER` RPC; hidden posts are filtered out of feed and leaderboard queries for all users team-wide; requires `supabase/migrations/004_keywords_and_hide.sql`
+- Login flow redesigned — automated DOM detection removed (fragile against Threads markup changes); installer opens browser then waits for user to visually confirm login and press Enter; startup login gate removed from scraper so a stale session shows as 0 posts rather than a hard exit
+- Installer (`install-mac.command`): desktop launcher now written with `printf` instead of a heredoc — fixes silent failure on Mac when the file has Windows CRLF line endings; "Press Enter to open the browser" prompt removed before `npm run login` to prevent the stale keypress from auto-confirming the login step; `process.stdin.destroy()` called after confirmation so Node exits cleanly and the installer continues
 - Distribution zip must include `install-mac.command`, `install-windows.bat`, `install-windows.ps1`, and a `scraper/` subfolder containing `package.json`, `tsconfig.json`, and `src/` — the installer expects this exact layout
 
 **Known issues:**
@@ -485,7 +495,7 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 - **Safari support for scraper control** — replace local HTTP server with Supabase-based command/status table so control works from any browser without mixed-content restrictions
 - **Topbar title** — add `'/scraper': 'Scraper'` to the `pageTitles` map in `src/components/Topbar.jsx`
 - **Additional scraper tabs** — Scraper view is tab-structured for future platforms (Instagram, X, etc.)
-- **NSFW / hide posts** — per-post hide and per-author block, team-wide via Supabase (`hidden` flag on `threads_posts` + `threads_blocked_authors` table); hidden posts filterable via Filters ▾ popover. Parked — not yet implemented.
+- **Per-author block** — block all posts from a given handle team-wide via a `threads_blocked_authors` table; blocked authors filterable via Filters ▾ popover
 
 ---
 

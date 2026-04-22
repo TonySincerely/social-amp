@@ -65,7 +65,7 @@ else
   echo ""
   read -rp "  Supabase URL: "            SUPABASE_URL
   read -rp "  Supabase Service Key: "    SUPABASE_SERVICE_KEY
-  read -rp "  Your name (e.g. alice): "  SCRAPER_USER_ID
+  read -rp "  Your name (e.g. zack): "  SCRAPER_USER_ID
   printf 'SUPABASE_URL=%s\nSUPABASE_SERVICE_KEY=%s\nSCRAPER_USER_ID=%s\n' \
     "$SUPABASE_URL" "$SUPABASE_SERVICE_KEY" "$SCRAPER_USER_ID" > "$SCRAPER_DIR/.env"
   echo ""
@@ -80,8 +80,6 @@ echo "================================"
 echo ""
 echo "  A browser window will open. Log in to your Threads account."
 echo "  Once you can see your feed, come back here and press Enter."
-echo ""
-read -rp "  Press Enter to open the browser..."
 echo ""
 cd "$SCRAPER_DIR"
 if npm run login; then
@@ -100,21 +98,21 @@ fi
 
 # ── Desktop launcher ──────────────────────────────────────────────────────────
 LAUNCHER="$HOME/Desktop/Start Scraper.command"
-cat > "$LAUNCHER" <<LAUNCHER_SCRIPT
-#!/usr/bin/env bash
-# NOTE: Do not move the social-amp-scraper folder or this launcher will break.
-cd "$SCRAPER_DIR"
-clear
-echo "================================"
-echo "  Social Amp Scraper"
-echo "================================"
-echo ""
-echo "  Server running on http://localhost:3001"
-echo "  Keep this window open while using the scraper."
-echo "  Close it to stop the server."
-echo ""
-npm run server
-LAUNCHER_SCRIPT
+{
+  printf '#!/usr/bin/env bash\n'
+  printf '# NOTE: Do not move the social-amp-scraper folder or this launcher will break.\n'
+  printf 'cd "%s"\n' "$SCRAPER_DIR"
+  printf 'clear\n'
+  printf 'echo "================================"\n'
+  printf 'echo "  Social Amp Scraper"\n'
+  printf 'echo "================================"\n'
+  printf 'echo ""\n'
+  printf 'echo "  Server running on http://localhost:3001"\n'
+  printf 'echo "  Keep this window open while using the scraper."\n'
+  printf 'echo "  Close it to stop the server."\n'
+  printf 'echo ""\n'
+  printf 'npm run server\n'
+} > "$LAUNCHER"
 chmod +x "$LAUNCHER"
 echo "  ✓ 'Start Scraper' added to your Desktop."
 echo ""

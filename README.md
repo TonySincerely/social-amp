@@ -117,14 +117,33 @@ The scraper runs locally (Playwright browser with your Threads session) and writ
 
 #### Option A — Installer (non-technical teammates)
 
-Create a zip containing `install-mac.command`, `install-windows.bat`, `install-windows.ps1`, and the `scraper/` folder. Share via Google Drive or USB. See `SCRAPER_SETUP.md` for the user-facing guide.
+**What to include in the zip:**
+```
+install-mac.command
+install-windows.bat
+install-windows.ps1
+scraper/
+  package.json
+  tsconfig.json
+  src/
+```
+Do not include `node_modules/`, `.env`, or any browser profile directories — the installer handles those on the target machine.
+
+Share via Google Drive or USB. See `SCRAPER_SETUP.md` for the user-facing guide.
 
 **Important when zipping:** create the zip on Mac (or a tool that preserves Unix permissions) so `install-mac.command` keeps its execute bit and LF line endings.
 
 - **Mac:** double-click `install-mac.command` (right-click → Open if Gatekeeper blocks it)
 - **Windows:** double-click `install-windows.bat` (More info → Run anyway if SmartScreen warns)
 
-Both installers: check Node.js, run `npm install`, download Playwright Chromium, prompt for `scraper/.env` credentials, open a browser for Threads login, and drop a **"Start Scraper"** shortcut on the Desktop.
+Both installers: check Node.js, run `npm install`, download Playwright Chromium, prompt for `scraper/.env` credentials, then step through platform logins:
+
+1. **Threads login** `(Y/n)` — default yes. Opens a browser; log in, then press Enter to confirm.
+2. **Twitter / X login** `(y/N)` — default no (optional). Same browser flow.
+
+Either login can be skipped and completed later by re-running the installer — already-done steps (Node check, dependencies, Playwright, credentials) are skipped automatically on re-run.
+
+After logins, the installer drops a **"Start Scraper"** shortcut on the Desktop.
 
 **Daily use after install:** double-click "Start Scraper" on Desktop → keep that window open → open the Vercel app → Scraper controls appear automatically.
 
@@ -557,7 +576,8 @@ Supabase RPC functions: `get_twitter_posts`, `get_twitter_velocity_leaderboard`,
 - **Hide post** — Hide button on feed and leaderboard cards; sets `hidden = true` via a `SECURITY DEFINER` RPC; hidden posts are filtered out of feed and leaderboard queries for all users team-wide; requires `supabase/migrations/004_keywords_and_hide.sql`
 - Login flow redesigned — automated DOM detection removed (fragile against Threads markup changes); installer opens browser then waits for user to visually confirm login and press Enter; startup login gate removed from scraper so a stale session shows as 0 posts rather than a hard exit
 - Installer (`install-mac.command`): desktop launcher now written with `printf` instead of a heredoc — fixes silent failure on Mac when the file has Windows CRLF line endings; "Press Enter to open the browser" prompt removed before `npm run login` to prevent the stale keypress from auto-confirming the login step; `process.stdin.destroy()` called after confirmation so Node exits cleanly and the installer continues
-- Distribution zip must include `install-mac.command`, `install-windows.bat`, `install-windows.ps1`, and a `scraper/` subfolder containing `package.json`, `tsconfig.json`, and `src/` — the installer expects this exact layout
+- Installer login steps are now Y/N-gated — Threads `(Y/n)` default yes, Twitter / X `(y/N)` default no; either can be skipped and completed by re-running the installer; already-done steps skip automatically on re-run
+- Distribution zip: `install-mac.command`, `install-windows.bat`, `install-windows.ps1`, and `scraper/` subfolder containing `package.json`, `tsconfig.json`, `src/` — do not include `node_modules/`, `.env`, or browser profile directories
 - **Twitter scraper** — home feed, keyword search, account tracker, Feed + Leaderboard + Account Tracker tabs — functional
 - Twitter feed: view counts, retweet/quote counts, reply badge, verified badge, **Reply on X →** — functional
 - Twitter leaderboard: view-weighted viral score, velocity arrows (↑/↑↑/↑↑↑), cross-scraper boost — functional

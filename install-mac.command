@@ -78,21 +78,66 @@ echo "================================"
 echo "  Log in to Threads"
 echo "================================"
 echo ""
-echo "  A browser window will open. Log in to your Threads account."
-echo "  Once you can see your feed, come back here and press Enter."
-echo ""
-cd "$SCRAPER_DIR"
-if npm run login; then
+read -rp "  Set up Threads login now? (Y/n): " THREADS_LOGIN
+if [[ "$THREADS_LOGIN" =~ ^[Nn] ]]; then
   echo ""
-  echo "  ✓ Login verified."
+  echo "  Skipped. To log in later:"
+  echo "    cd $SCRAPER_DIR && npm run login"
   echo ""
 else
   echo ""
-  echo "  ⚠ Login could not be verified."
-  echo "  If you completed login, this may be a browser issue — you can retry later:"
-  echo "    cd $SCRAPER_DIR && npm run login"
+  echo "  A browser window will open. Log in to your Threads account."
+  echo "  Once you can see your feed, come back here and press Enter."
   echo ""
-  read -rp "  Press Enter to continue anyway, or Ctrl+C to exit and retry..."
+  echo "  (OK to skip for now — just run this installer again later to complete login.)"
+  echo ""
+  cd "$SCRAPER_DIR"
+  if npm run login; then
+    echo ""
+    echo "  ✓ Login verified."
+    echo ""
+  else
+    echo ""
+    echo "  ⚠ Login could not be verified."
+    echo "  If you completed login, this may be a browser issue — you can retry later:"
+    echo "    cd $SCRAPER_DIR && npm run login"
+    echo ""
+    read -rp "  Press Enter to continue anyway, or Ctrl+C to exit and retry..."
+    echo ""
+  fi
+fi
+
+# ── Twitter / X login ─────────────────────────────────────────────────────────
+echo "================================"
+echo "  Log in to Twitter / X"
+echo "================================"
+echo ""
+read -rp "  Set up Twitter / X login now? (y/N): " TWITTER_LOGIN
+if [[ "$TWITTER_LOGIN" =~ ^[Yy] ]]; then
+  echo ""
+  echo "  A browser window will open. Log in to your Twitter / X account."
+  echo "  Once you can see your feed, come back here and press Enter."
+  echo ""
+  echo "  (OK to skip for now — just run this installer again later to complete login.)"
+  echo ""
+  cd "$SCRAPER_DIR"
+  if npm run twitter:login; then
+    echo ""
+    echo "  ✓ Login verified."
+    echo ""
+  else
+    echo ""
+    echo "  ⚠ Login could not be verified."
+    echo "  If you completed login, this may be a browser issue — you can retry later:"
+    echo "    cd $SCRAPER_DIR && npm run twitter:login"
+    echo ""
+    read -rp "  Press Enter to continue anyway, or Ctrl+C to exit and retry..."
+    echo ""
+  fi
+else
+  echo ""
+  echo "  Skipped. To log in later:"
+  echo "    cd $SCRAPER_DIR && npm run twitter:login"
   echo ""
 fi
 

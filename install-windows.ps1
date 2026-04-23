@@ -89,16 +89,54 @@ Write-Host '================================' -ForegroundColor Cyan
 Write-Host '  Log in to Threads'
 Write-Host '================================' -ForegroundColor Cyan
 Write-Host ''
-Write-Host '  A browser window will open.'
-Write-Host '  Log in to your Threads account.'
-Write-Host '  Once you can see your feed, come back here and press Enter.'
+$threadsLogin = Read-Host '  Set up Threads login now? (Y/n)'
+if ($threadsLogin -match '^[Nn]') {
+    Write-Host ''
+    Write-Host "  Skipped. To log in later:" -ForegroundColor Yellow
+    Write-Host "    cd $ScraperDir && npm run login" -ForegroundColor Yellow
+    Write-Host ''
+} else {
+    Write-Host ''
+    Write-Host '  A browser window will open.'
+    Write-Host '  Log in to your Threads account.'
+    Write-Host '  Once you can see your feed, come back here and press Enter.'
+    Write-Host ''
+    Write-Host '  (OK to skip for now - just run this installer again later to complete login.)'
+    Write-Host ''
+    Push-Location $ScraperDir
+    npm run login
+    Pop-Location
+    Write-Host ''
+    Write-Host '  OK Login complete.' -ForegroundColor Green
+    Write-Host ''
+}
+
+# ── Twitter / X login ─────────────────────────────────────────────────────────
+Write-Host '================================' -ForegroundColor Cyan
+Write-Host '  Log in to Twitter / X'
+Write-Host '================================' -ForegroundColor Cyan
 Write-Host ''
-Push-Location $ScraperDir
-npm run login
-Pop-Location
-Write-Host ''
-Write-Host '  OK Login complete.' -ForegroundColor Green
-Write-Host ''
+$twitterLogin = Read-Host '  Set up Twitter / X login now? (y/N)'
+if ($twitterLogin -match '^[Yy]') {
+    Write-Host ''
+    Write-Host '  A browser window will open.'
+    Write-Host '  Log in to your Twitter / X account.'
+    Write-Host '  Once you can see your feed, come back here and press Enter.'
+    Write-Host ''
+    Write-Host '  (OK to skip for now - just run this installer again later to complete login.)'
+    Write-Host ''
+    Push-Location $ScraperDir
+    npm run twitter:login
+    Pop-Location
+    Write-Host ''
+    Write-Host '  OK Login complete.' -ForegroundColor Green
+    Write-Host ''
+} else {
+    Write-Host ''
+    Write-Host "  Skipped. To log in later:" -ForegroundColor Yellow
+    Write-Host "    cd $ScraperDir && npm run twitter:login" -ForegroundColor Yellow
+    Write-Host ''
+}
 
 # ── Desktop launcher ──────────────────────────────────────────────────────────
 $desktop  = [Environment]::GetFolderPath('Desktop')

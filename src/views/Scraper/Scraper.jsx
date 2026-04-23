@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import { ThreadsScraper } from './ThreadsScraper'
+import { TwitterScraper } from './TwitterScraper'
 import './Scraper.css'
 
-const TABS = [{ id: 'threads', label: 'Threads' }]
+const TABS = [
+  { id: 'threads', label: 'Threads' },
+  { id: 'twitter', label: 'Twitter / X' },
+]
 
 export function Scraper() {
   const [activeTab, setActiveTab] = useState('threads')
@@ -26,6 +30,7 @@ export function Scraper() {
         </div>
       </div>
       {activeTab === 'threads' && <ThreadsScraper />}
+      {activeTab === 'twitter' && <TwitterScraper />}
     </div>
   )
 }

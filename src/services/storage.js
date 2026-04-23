@@ -175,6 +175,51 @@ export async function hidePost(postId) {
   if (error) throw error
 }
 
+// ─── Twitter keywords + hide ──────────────────────────────────────────────────
+
+export async function getTwitterKeywords() {
+  const { data, error } = await supabase.from('twitter_keywords').select('keyword').order('created_at')
+  if (error) throw error
+  return data.map(r => r.keyword)
+}
+
+export async function addTwitterKeyword(keyword) {
+  const { error } = await supabase
+    .from('twitter_keywords')
+    .upsert({ keyword }, { onConflict: 'keyword', ignoreDuplicates: true })
+  if (error) throw error
+}
+
+export async function deleteTwitterKeyword(keyword) {
+  const { error } = await supabase.from('twitter_keywords').delete().eq('keyword', keyword)
+  if (error) throw error
+}
+
+export async function hideTwitterPost(postId) {
+  const { error } = await supabase.rpc('hide_twitter_post', { p_post_id: postId })
+  if (error) throw error
+}
+
+// ─── Twitter watch accounts ───────────────────────────────────────────────────
+
+export async function getTwitterWatchAccounts() {
+  const { data, error } = await supabase.from('twitter_watch_accounts').select('*').order('added_at')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function addTwitterWatchAccount(username, displayName = '') {
+  const { error } = await supabase
+    .from('twitter_watch_accounts')
+    .upsert({ username: username.replace(/^@/, ''), display_name: displayName }, { onConflict: 'username', ignoreDuplicates: true })
+  if (error) throw error
+}
+
+export async function deleteTwitterWatchAccount(username) {
+  const { error } = await supabase.from('twitter_watch_accounts').delete().eq('username', username)
+  if (error) throw error
+}
+
 // ─── LocalStorage helpers ─────────────────────────────────────────────────────
 
 export function setLocalData(key, value) {

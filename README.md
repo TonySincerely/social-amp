@@ -1,6 +1,6 @@
 # Social Amp
 
-An internal tool for validating product ideas through coordinated social media activity. AI-assisted content creation across multiple accounts — no OAuth, no live posting. Data stored in Supabase (cloud) and local SQLite (scraper).
+An internal tool for validating product ideas through coordinated social media activity. AI-assisted content creation across multiple accounts — no OAuth, no live posting. Data stored in Supabase (cloud); scrapers run locally via Playwright.
 
 ## What it does
 
@@ -13,7 +13,7 @@ An internal tool for validating product ideas through coordinated social media a
 | **Calendar Planner** | `/planner` | Generate a full month of skeleton post slots based on best-practice frequency, optimal times, and platform-specific day distribution. |
 | **Calendar** | `/calendar` | Monthly grid of all posts. Draft slots (from planner) and ready posts (from studio) shown with distinct visual states. Click any date to open Quick Create pre-filled with that date. |
 | **Pulse** | `/pulse` | Daily trend and planning view. Upcoming cultural moments (next 6 weeks, region-aware) alongside live trend snapshots across Twitter, Reddit, Instagram, and the web. Star trends, send directly to Content Studio as an angle. |
-| **Scraper** | `/scraper` | Local Threads feed monitor. Scrapes your Threads home feed via Playwright, stores engagement snapshots in SQLite, calculates velocity to surface viral posts. Feed and leaderboard data loads from Supabase on all devices — Start/Stop/Logs controls only appear when a local scraper server is reachable. Leaderboard cards send post text to Content Studio via "Post as →". |
+| **Scraper** | `/scraper` | Multi-platform feed monitor with two tabs — **Threads** and **Twitter / X**. Each scrapes your home feed via Playwright, stores engagement snapshots in Supabase, and calculates velocity to surface viral posts. Twitter adds keyword search, view counts, and an **Account Tracker** tab for monitoring watched handles and finding reply opportunities. Feed and leaderboard data loads from Supabase on all devices — Start/Stop/Logs controls only appear when a local scraper server is reachable. |
 | **Quick Create** | Sidebar `+ New Post` | Right-side overlay drawer. 4-step wizard to go from zero to a scheduled post without leaving the current view. |
 
 ---
@@ -28,8 +28,9 @@ social-amp/
 │   ├── data/                   # upcomingEvents.js, visualPresets.js, languages.js
 │   ├── services/
 │   │   ├── gemini.js           # All Gemini API calls
-│   │   ├── storage.js          # Supabase CRUD (products, accounts, calendar, trends, platform configs)
+│   │   ├── storage.js          # Supabase CRUD (products, accounts, calendar, trends, platform configs, Twitter watch accounts)
 │   │   ├── threads.js          # Threads scraper API client (local server)
+│   │   ├── twitter.js          # Twitter scraper API client (local server + Supabase RPCs)
 │   │   └── planner.js          # Scheduling algorithm — no AI
 │   ├── styles/
 │   │   └── tokens.css          # Design tokens
@@ -42,25 +43,33 @@ social-amp/
 │       ├── Planner/
 │       ├── Calendar/
 │       ├── Pulse/
-│       └── Scraper/            # ThreadsScraper.jsx — control bar, SSE logs, leaderboard, feed
+│       └── Scraper/            # Scraper.jsx (platform tabs), ThreadsScraper.jsx, TwitterScraper.jsx
 ├── scraper/                    # Node.js scraper workspace (TypeScript)
 │   ├── src/
 │   │   ├── agent/
-│   │   │   ├── browser.ts      # Playwright launch, login, scrolling
-│   │   │   ├── parser.ts       # GraphQL counter-refresh parsing
-│   │   │   └── scraper.ts      # DOM scraping (primary), feed loop
+│   │   │   ├── browser.ts          # Playwright launch (shared, accepts profileDir override)
+│   │   │   ├── parser.ts           # Threads GraphQL counter-refresh parsing
+│   │   │   ├── scraper.ts          # Threads DOM scraping, feed loop
+│   │   │   ├── twitter-browser.ts  # Twitter nav helpers (home, search, profile)
+│   │   │   └── twitter-scraper.ts  # Twitter DOM scraping, TweetPost type, feed loop
 │   │   ├── storage/
-│   │   │   └── db.ts           # SQLite schema, upsert, snapshots (better-sqlite3)
+│   │   │   ├── db.ts               # Threads Supabase CRUD
+│   │   │   └── twitter-db.ts       # Twitter Supabase CRUD + getWatchAccounts
 │   │   ├── analyzer/
-│   │   │   └── velocity.ts     # Engagement velocity calculation
+│   │   │   └── velocity.ts         # (stub — velocity computed in Supabase RPCs)
 │   │   ├── cli/
-│   │   │   ├── login.ts        # One-time Threads login
-│   │   │   ├── start.ts        # Continuous scraping loop
-│   │   │   ├── test-scrape.ts  # One-shot test, no DB
-│   │   │   ├── test-scroll.ts  # Scroll + save test
-│   │   │   └── dump-raw.ts     # Raw DOM debug dump
-│   │   ├── config.ts           # Paths, URLs, timing constants
-│   │   └── server.ts           # Express API server — scraper control + data endpoints
+│   │   │   ├── login.ts            # One-time Threads login
+│   │   │   ├── start.ts            # Threads continuous home feed loop
+│   │   │   ├── search.ts           # Threads one-shot keyword scrape
+│   │   │   ├── test-scrape.ts      # Threads one-shot test, no DB
+│   │   │   ├── dump-raw.ts         # Threads raw DOM debug dump
+│   │   │   ├── twitter-login.ts    # One-time Twitter/X login
+│   │   │   ├── twitter-start.ts    # Twitter continuous home feed loop
+│   │   │   ├── twitter-search.ts   # Twitter one-shot keyword scrape
+│   │   │   ├── twitter-accounts.ts # Twitter account tracker scrape (watched handles)
+│   │   │   └── twitter-test.ts     # Twitter one-shot test, no DB
+│   │   ├── config.ts               # Paths, URLs, timing constants (Threads + Twitter)
+│   │   └── server.ts               # Express API server — /api/threads/* + /api/twitter/*
 │   ├── package.json
 │   └── tsconfig.json
 ├── package.json                # Workspace root — scripts for both packages
@@ -151,14 +160,22 @@ SCRAPER_USER_ID=yourname
 npm run scraper:login
 ```
 
-**Start the local API server** (required for Start/Stop/Logs in the UI):
+**One-time Twitter/X login** (saves session to `~/.twitter-tracker/browser-profile/`):
+```bash
+cd scraper && npm run twitter:login
+```
+
+**Start the local API server** (required for Start/Stop/Logs in the UI — serves both Threads and Twitter):
 ```bash
 npm run scraper:server   # Express server on http://localhost:3001
 ```
 
 **CLI usage** (bypass the UI):
 ```bash
-npm run scraper:start    # continuous loop, 5–15 min interval
+npm run scraper:start         # Threads continuous loop, 5–15 min interval
+npm run twitter:start         # Twitter continuous home feed loop, 8–20 min interval
+KEYWORD=ai npm run twitter:search    # Twitter one-shot keyword scrape
+npm run twitter:accounts      # Scrape all watched accounts (Account Tracker)
 ```
 
 ---
@@ -275,75 +292,97 @@ Draft slots show as dashed amber chips on the calendar. Click to open the drawer
 
 Snapshots stored in Supabase (`trend_snapshots` table), pruned to 5 most recent on each save.
 
-### Scraper
+### Scraper — Threads tab
 
-The Scraper module collects real engagement data from your Threads home feed using a local Playwright browser with your logged-in session. It runs entirely on your machine — no cloud scraping, no external APIs beyond Threads itself.
+Collects engagement data from your Threads home feed using a local Playwright browser with your logged-in session.
 
 **How it works:**
-1. Playwright opens a persistent Chromium profile (`~/.threads-tracker/browser-profile/`) where your Threads session is saved
+1. Playwright opens a persistent Chromium profile (`~/.threads-tracker/browser-profile/`)
 2. Scrapes `div[data-pressable-container='true']` containers for post text, author, timestamp, engagement counts, and media type
-3. Media type detected from DOM: `video` element → `VIDEO`; multiple non-profile `img` tags → `CAROUSEL`; one → `IMAGE`; text-only → `TEXT`
-4. Engagement buttons identified by SVG `aria-label` values (`讚`/`Like`, `回覆`/`Reply`, `轉發`/`Repost`, `分享`/`Share`)
-5. Posts and snapshots written directly to Supabase via the service-role key
-6. Velocity calculated as Δlikes ÷ Δtime between first and last snapshot
+3. Engagement buttons identified by SVG `aria-label` values (`讚`/`Like`, `回覆`/`Reply`, `轉發`/`Repost`, `分享`/`Share`)
+4. Posts and snapshots written directly to Supabase via the service-role key
+5. Velocity calculated as Δlikes ÷ Δtime between snapshots via Supabase RPC
 
 **Scraper view (`/scraper → Threads tab`):**
-- **Control bar** — only rendered when the local scraper server is reachable. Unified Start button (context-aware: `Start scraper` on home feed, `Start scraper: [keyword]` with a keyword active), frequency selector (`Once · 30m · 1h · 2h · 4h`, persisted in localStorage), Stop/Cancel loop, collapsible log panel (SSE stream from server stdout). Status dot: green pulse (running) / teal (loop countdown) / grey (idle). Status label shows countdown between runs: `Next run in 14m · "ai"`. When no local server is detected, a notice is shown and feed/leaderboard data still loads from Supabase.
-- **Feed tab** (default) — keyword bar + filter tray + paginated post cards. Each card shows the post's published time (hover reveals full posted time, scraped time, and scraper ID), text clamped to 3 lines, engagement counts, media type badge, and a coloured left border indicating content age (green < 6h, amber < 24h, orange 24h+). **Go to →** opens the post on Threads in a new tab. **Hide** removes the post team-wide (hidden posts are filtered at the database level for all users).
-- **Leaderboard tab** — posts ranked by **viral score** (composite velocity across likes, replies ×2, reposts ×3) over a 6h window. Requires ≥2 scrape cycles. Each card shows the score, absolute engagement counts, media type badge, age-band left border, a **Go to →** link, and a **Hide** button.
-- Control bar hidden when local scraper server is not reachable; feed and leaderboard still load from Supabase
+- **Control bar** — only rendered when the local server is reachable. Start button (context-aware: `Start scraper` on home feed, `Start scraper: [keyword]` with a keyword active), frequency selector (`Once · 30m · 1h · 2h · 4h`), Stop/Cancel loop, collapsible log panel (SSE stream).
+- **Feed tab** (default) — keyword bar + filter tray + paginated post cards. Age-band left border (green < 6h, amber < 24h, orange 24h+). **Go to →** and **Hide** (team-wide).
+- **Leaderboard tab** — viral score (Δlikes×1 + Δreplies×2 + Δreposts×3) / minutes, 6h window. Cross-scraper boost: ×(1 + (scraper_count − 1) × 0.5).
 
-**Feed filters and sort:**
-The filter tray groups all controls in a single contained row:
-- **Time window** — `Live · 6h / 24h / 48h / All` chips (default 24h). Filters by published time with scrape-time fallback.
-- **Sort** — segmented control: `Recent` (scrape time, default) · `Posted` (publish time; no-timestamp posts sort to bottom) · `Top` (most likes). Requires `supabase/migrations/002_top_sort.sql` to be applied.
-- **Media** — `All / Img / Vid / Carousel / Text` multi-select chips. `Text` includes posts with no detected media type.
-- **Scrapers ▾** — multi-select dropdown listing all scrapers seen in current results. Scales to any team size. Shows active count badge when filtered.
-- **Filters ▾** — popover with author (free-text handle filter) and min likes threshold. Active filter count shown on button.
+**Filter tray:** Time window · Sort (Recent / Posted / Top) · Media type · Scrapers ▾ · Filters ▾ (author, min likes).
 
-**Keyword search (Feed tab):**
-Type a keyword (e.g. `ai`, `政治`, `可愛`) in the `+ Add keyword…` input and press Enter to save it as a chip. Saved chips are stored in Supabase (`threads_keywords` table) and shared across all team members — keywords added by one person appear for everyone. Chips are **view-only** — clicking switches which results you see without triggering a scrape. To scrape the active keyword, either hit **Start scraper: [keyword]** in the control bar or use the **↻ Scrape now** shortcut that appears inline in the keyword bar when the server is idle. Click **Home feed** to return to untagged home feed posts.
+**Keyword search:** Add keyword chips (shared in Supabase). Click a chip to filter feed. Start button becomes `Start scraper: [keyword]` to scrape that keyword.
 
-**Data freshness:**
-A **Last scraped X ago** badge sits at the right of the keyword bar and turns amber when data is more than 2 hours old. The timestamp persists in localStorage (`threads_last_scraped_times`) so it survives page reloads. The feed refreshes automatically when a scrape cycle completes.
-
-**Loop scheduling:**
-The frequency selector controls repeat behaviour. `Once` = one cycle then stop. Any other value (30m–4h) schedules the next run automatically after the current one completes, counting from run end. The loop target (home feed or keyword) is locked at Start time — switching keyword tabs mid-loop does not change what gets scraped. Stop cancels both the active run and any pending next cycle. `Cancel loop` appears in place of Start during the countdown between runs. The backend process always runs a single cycle when launched from the UI; the frontend owns all loop timing. Running `npm run scraper:start` directly (CLI) still uses the built-in continuous loop.
-
-**Local API server** (`scraper/src/server.ts`, port 3001):
+**Local API endpoints (`/api/threads/*`):**
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| `GET` | `/api/threads/status` | `{ running, pid, keyword }` — `keyword` is non-null during a keyword scrape |
-| `POST` | `/api/threads/start` | spawn home feed scraper child process |
-| `POST` | `/api/threads/stop` | SIGTERM to child process |
-| `POST` | `/api/threads/search` | body `{ keyword }` — stops any running process, spawns one-shot keyword scrape |
-| `GET` | `/api/threads/stream` | SSE — scraper stdout/stderr, buffered last 200 lines |
-| `GET` | `/api/threads/posts` | paginated posts; no `keyword` param → home feed (`keyword IS NULL`); `keyword=ai` → that keyword's posts. Optional: `sortBy=scraped\|posted`, `mediaTypes=IMAGE,VIDEO,CAROUSEL,TEXT`, `timeWindow` (hours, filters by published time with scrape-time fallback) |
-| `GET` | `/api/threads/velocity` | viral score leaderboard — composite score (Δlikes×1 + Δreplies×2 + Δreposts×3) / minutes, 6h window, sorted by score desc. Params: `limit`, `maxAge` (minutes) |
+| `GET` | `/api/threads/status` | `{ running, pid, keyword }` |
+| `POST` | `/api/threads/start` | spawn home feed scraper |
+| `POST` | `/api/threads/stop` | SIGTERM |
+| `POST` | `/api/threads/search` | body `{ keyword }` — one-shot keyword scrape |
+| `GET` | `/api/threads/stream` | SSE log stream |
 
-**Safety:**
-- Default 5–15 min random interval. Don't go below 3 min.
-- Keep `SCROLL_COUNT` at 3–8. High values increase detection risk.
-- Run during active hours only. Don't leave running overnight.
-- One instance only — never run two sessions against the same browser profile.
-- Read-only — never clicks, likes, replies, or posts.
+**Safety:** Default 5–15 min interval. Keep `SCROLL_COUNT` ≤ 8. Never run two sessions against the same profile.
 
-**Env overrides:**
 ```bash
-SCROLL_COUNT=8 npm run scraper:start          # more posts per cycle
-MIN_INTERVAL=3 MAX_INTERVAL=8 npm run scraper:start  # faster polling
+SCROLL_COUNT=8 npm run scraper:start
+MIN_INTERVAL=3 MAX_INTERVAL=8 npm run scraper:start
 ```
 
-> **Do not use `HEADLESS=1`** — headless browsers are easier for Meta to detect.
+> **Do not use `HEADLESS=1`** — headless browsers are easier to detect.
 
-**Debugging:**
-If the feed shows 0 posts, check that extraction is working:
+**Debugging:** `cd scraper && npx ts-node src/cli/test-scrape.ts`
+
+---
+
+### Scraper — Twitter / X tab
+
+Collects engagement data from Twitter/X using a separate Playwright browser profile (`~/.twitter-tracker/browser-profile/`). Requires a one-time login (`npm run twitter:login`). Data written to Supabase and shared across all team members.
+
+**How it works:**
+1. Playwright opens a persistent Chromium profile at `~/.twitter-tracker/browser-profile/`
+2. Scrapes `article[data-testid="tweet"]` containers — text, author, timestamp, media type
+3. Engagement extracted from `data-testid` button `aria-label` values (`"154 Likes. Like"`, `"14 reposts. Repost"`, etc.)
+4. View counts extracted from span text matching `/views?$/i` near the tweet action bar
+5. Posts saved to `twitter_posts` with `source` tag (`home`, `keyword`, or `account`)
+
+**Scraper view (`/scraper → Twitter / X tab`):**
+- **Control bar** — same pattern as Threads. Start button is context-aware: `Start scraper` for home feed, `Start scraper: [keyword]` when a keyword chip is active.
+- **Feed tab** — keyword bar + full filter tray + paginated tweet cards. Cards show view count (👁), likes, replies, RTs, quote count, reply badge, verified badge, media badge. **Reply on X →** opens the tweet directly. **Hide** removes team-wide.
+- **Leaderboard tab** — viral score: (Δviews×0.3 + Δretweets×3 + Δquotes×2 + Δreplies×1.5 + Δlikes×1) / minutes. Velocity arrows (↑/↑↑/↑↑↑) on each card. 4h window.
+- **Account Tracker tab** — posts from watched accounts sorted by **reply score** (velocity × recency decay, half-value at 3 min). Red pulsing dot on tab label when live posts exist. Time window: < 5m / < 10m / < 20m / All (default 10m). Cards show precise age (`3m ago`) and velocity arrows. **Reply on X →** button.
+
+**Watched Accounts:**
+Add @handles in the Account Tracker tab. Stored in `twitter_watch_accounts` (Supabase), shared across team. **↻ Scrape accounts** button triggers a one-shot scrape of all watched handles. Account Tracker shows posts from watched handles regardless of how they were scraped (home feed, keyword, or dedicated account scrape).
+
+**Keyword search:** Same pattern as Threads. Keywords shared in `twitter_keywords`. Clicking a chip filters the feed; the Start button becomes `Start scraper: [keyword]` to scrape that keyword via `x.com/search?q=keyword&src=typed_query`.
+
+**Local API endpoints (`/api/twitter/*`):**
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `GET` | `/api/twitter/status` | `{ running, pid, mode }` — mode: `null \| 'home' \| 'search' \| 'accounts'` |
+| `POST` | `/api/twitter/start` | spawn home feed scraper |
+| `POST` | `/api/twitter/stop` | SIGTERM |
+| `POST` | `/api/twitter/search` | body `{ keyword }` — one-shot keyword scrape |
+| `POST` | `/api/twitter/accounts` | scrape all watched accounts |
+| `GET` | `/api/twitter/stream` | SSE log stream |
+
+Data (feed, leaderboard, Account Tracker) is queried from Supabase directly by the frontend via RPCs (`get_twitter_posts`, `get_twitter_velocity_leaderboard`, `get_twitter_hot_window`).
+
+**Safety:** Default 8–20 min interval (Twitter is more aggressive than Threads). Keep `SCROLL_COUNT` ≤ 4. Max 5 accounts per cycle. Never run home feed and account scraping simultaneously. Separate browser profile from Threads — never share.
+
 ```bash
-cd scraper && npx ts-node src/cli/test-scrape.ts
+SCROLL_COUNT=3 npm run twitter:start
+MIN_INTERVAL=8 MAX_INTERVAL=20 npm run twitter:start
+MAX_ACCOUNTS=3 npm run twitter:accounts
 ```
 
-If post containers are found but counts are wrong, Threads may have changed button `aria-label` values — inspect `div[role="button"]` SVG labels in the page.
+> **Do not use `HEADLESS=1`** — headless browsers are easier for X to detect.
+
+**Debugging:** `cd scraper && npm run twitter:test`
+
+If the Account Tracker shows no posts after adding watched accounts, the `get_twitter_hot_window` RPC needs `supabase/migrations/006_account_tracker_fix.sql` applied — this switches the filter to match by `author_username` rather than `watch_username`, so home-feed posts from watched handles appear immediately.
 
 ---
 
@@ -447,11 +486,51 @@ Constraints at positions 6–8 are placed last in the prompt to maximise adheren
 
 Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC functions (`get_velocity_leaderboard`, `get_threads_posts`) — see `supabase/migrations/001_threads_tables.sql`.
 
+### Supabase — twitter tables
+
+**twitter_posts** — one row per unique tweet
+
+| Column | Notes |
+|--------|-------|
+| `post_id` | numeric tweet ID as text (PK) |
+| `author_username` | @handle |
+| `author_verified` | boolean |
+| `text` | tweet content |
+| `permalink` | full URL |
+| `created_at` | Unix timestamp |
+| `first_seen_at` | timestamp of first observation (immutable via DB trigger) |
+| `scraper_user_id` | which team member's scraper collected this post |
+| `source` | `home` · `keyword` · `account` |
+| `keyword` | set when source=keyword |
+| `watch_username` | set when source=account |
+| `media_type` | `TEXT / IMAGE / VIDEO / CAROUSEL` |
+| `is_reply` | whether the tweet is a reply |
+| `is_promoted` | promoted tweets are never persisted |
+| `hidden` | team-wide hide via `hide_twitter_post` RPC |
+| `view_count`, `like_count`, `reply_count`, `retweet_count`, `quote_count` | latest counts |
+
+**twitter_snapshots** — one row per engagement observation per post (used for velocity)
+
+**twitter_post_scrapers** — which scrapers have seen each post (junction table, same pattern as Threads)
+
+**twitter_keywords** — shared keyword list (same pattern as `threads_keywords`)
+
+**twitter_watch_accounts** — accounts monitored in the Account Tracker
+
+| Column | Notes |
+|--------|-------|
+| `username` | handle without @ (PK) |
+| `display_name` | optional display name |
+| `added_by` | scraper_user_id of who added it |
+| `added_at` | timestamp |
+
+Supabase RPC functions: `get_twitter_posts`, `get_twitter_velocity_leaderboard`, `get_twitter_hot_window`, `hide_twitter_post` — see `supabase/migrations/005_twitter_tables.sql` and `006_account_tracker_fix.sql`.
+
 ---
 
 ## Current status
 
-**Working as of 2026-04-22.**
+**Working as of 2026-04-23.**
 
 - Scraper login, post extraction, engagement counts, Supabase persistence — functional
 - Scraper control from browser UI (Start/Stop/Logs via SSE) — functional
@@ -479,10 +558,17 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 - Login flow redesigned — automated DOM detection removed (fragile against Threads markup changes); installer opens browser then waits for user to visually confirm login and press Enter; startup login gate removed from scraper so a stale session shows as 0 posts rather than a hard exit
 - Installer (`install-mac.command`): desktop launcher now written with `printf` instead of a heredoc — fixes silent failure on Mac when the file has Windows CRLF line endings; "Press Enter to open the browser" prompt removed before `npm run login` to prevent the stale keypress from auto-confirming the login step; `process.stdin.destroy()` called after confirmation so Node exits cleanly and the installer continues
 - Distribution zip must include `install-mac.command`, `install-windows.bat`, `install-windows.ps1`, and a `scraper/` subfolder containing `package.json`, `tsconfig.json`, and `src/` — the installer expects this exact layout
+- **Twitter scraper** — home feed, keyword search, account tracker, Feed + Leaderboard + Account Tracker tabs — functional
+- Twitter feed: view counts, retweet/quote counts, reply badge, verified badge, **Reply on X →** — functional
+- Twitter leaderboard: view-weighted viral score, velocity arrows (↑/↑↑/↑↑↑), cross-scraper boost — functional
+- Twitter Account Tracker: watched accounts panel (shared in Supabase), time window filter (< 5m/10m/20m/All), reply-score sort, pulsing tab dot — functional
+- Account Tracker matches posts by `author_username` (any source) — requires `supabase/migrations/006_account_tracker_fix.sql`
+- Twitter keyword search URL: `x.com/search?q=keyword&src=typed_query` — home-first navigation to avoid SPA redirect to /home
 
 **Known issues:**
 - Safari blocks HTTP fetch from HTTPS pages — scraper control bar not reachable from Safari; use Chrome. Long-term fix: Supabase-based control (no local server required) or HTTPS local server with trusted cert via mkcert
 - `npm run scraper:migrate` references removed SQLite dependency — safe to ignore, migration was a one-time operation
+- `test-scroll.ts` references removed SQLite symbols — safe to ignore, debug script only
 
 **Known Windows-specific notes:**
 - Scraper must be spawned with `stdio: ['inherit', 'pipe', 'pipe']` — Chrome exits with code 21 if stdin handle is `INVALID_HANDLE_VALUE`
@@ -494,7 +580,7 @@ Velocity, feed queries, and cross-bubble scoring are served via Postgres RPC fun
 
 - **Safari support for scraper control** — replace local HTTP server with Supabase-based command/status table so control works from any browser without mixed-content restrictions
 - **Topbar title** — add `'/scraper': 'Scraper'` to the `pageTitles` map in `src/components/Topbar.jsx`
-- **Additional scraper tabs** — Scraper view is tab-structured for future platforms (Instagram, X, etc.)
+- **Twitter scraper — Phase 4: Trending tab** — scrape X Explore trending topics, store as timestamped snapshots, surface in a Trending tab with `Search →` and `Post as →` actions
 - **Per-author block** — block all posts from a given handle team-wide via a `threads_blocked_authors` table; blocked authors filterable via Filters ▾ popover
 
 ---

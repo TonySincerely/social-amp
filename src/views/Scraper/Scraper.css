@@ -1214,3 +1214,116 @@
   color: var(--ink-3);
   font-family: var(--font-mono);
 }
+
+/* ── Twitter-specific ───────────────────────────────────────────────── */
+.sc-verified-badge {
+  font-size: 10px;
+  color: #1d9bf0;
+  font-weight: 700;
+}
+
+.sc-reply-badge {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.sc-view-count {
+  font-size: 11px;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.sc-velocity-arrow {
+  font-weight: 700;
+  color: var(--teal);
+}
+
+/* ── Account Tracker ────────────────────────────────────────────────── */
+.sc-account-tracker {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.sc-watch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sc-watch-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.sc-watch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.sc-watch-chip-remove {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 13px;
+  color: var(--ink-3);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.sc-watch-chip-remove:hover {
+  color: var(--ink);
+}
+
+.sc-at-time-filter {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.sc-at-age {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+/* Green pulse border on very fresh cards (< 5m) */
+.sc-at-card-fresh {
+  border-left-color: #22c55e !important;
+  box-shadow: inset 3px 0 0 #22c55e;
+}
+
+/* Live dot on Account Tracker tab label */
+.sc-tab-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  margin-left: 5px;
+  vertical-align: middle;
+  animation: sc-dot-pulse 1.4s ease-in-out infinite;
+}

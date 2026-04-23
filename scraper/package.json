@@ -9,7 +9,12 @@
     "dump-raw": "npx ts-node src/cli/dump-raw.ts",
     "start": "npx ts-node src/cli/start.ts",
     "server": "npx ts-node src/server.ts",
-    "migrate": "npx ts-node src/cli/migrate.ts"
+    "migrate": "npx ts-node src/cli/migrate.ts",
+    "twitter:login": "npx ts-node src/cli/twitter-login.ts",
+    "twitter:test":  "npx ts-node src/cli/twitter-test.ts",
+    "twitter:start":  "npx ts-node src/cli/twitter-start.ts",
+    "twitter:search":   "npx ts-node src/cli/twitter-search.ts",
+    "twitter:accounts": "npx ts-node src/cli/twitter-accounts.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",

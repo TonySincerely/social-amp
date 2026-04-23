@@ -6,10 +6,11 @@ import { CONFIG } from '../config';
  * The profile is saved to disk so login sessions survive restarts.
  */
 export async function launchBrowser(
-  headless: boolean = false
+  headless: boolean = false,
+  profileDir?: string
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await chromium.launchPersistentContext(
-    CONFIG.BROWSER_PROFILE_DIR,
+    profileDir ?? CONFIG.BROWSER_PROFILE_DIR,
     {
       headless,
       viewport: CONFIG.VIEWPORT,

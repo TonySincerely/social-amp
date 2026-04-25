@@ -9,6 +9,7 @@ const pageTitles = {
   '/pulse': 'Pulse',
   '/playbook': 'Playbook',
   '/scraper': 'Scraper',
+  '/booster': 'Booster',
 }
 
 export function Topbar() {

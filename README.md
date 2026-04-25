@@ -15,6 +15,7 @@ An internal tool for validating product ideas through coordinated social media a
 | **Pulse** | `/pulse` | Daily trend and planning view. Upcoming cultural moments (next 6 weeks, region-aware) alongside live trend snapshots across Twitter, Reddit, Instagram, and the web. Star trends, send directly to Content Studio as an angle. |
 | **Scraper** | `/scraper` | Multi-platform feed monitor with two tabs — **Threads** and **Twitter / X**. Each scrapes your home feed via Playwright, stores engagement snapshots in Supabase, and calculates velocity to surface viral posts. Twitter adds keyword search, view counts, and an **Account Tracker** tab for monitoring watched handles and finding reply opportunities. Feed and leaderboard data loads from Supabase on all devices — Start/Stop/Logs controls only appear when a local scraper server is reachable. |
 | **Quick Create** | Sidebar `+ New Post` | Right-side overlay drawer. 4-step wizard to go from zero to a scheduled post without leaving the current view. |
+| **Booster** | `/booster` | Single-account Threads content decision system. Import post history, build a Brand Voice profile, surface topics worth writing, generate voice-aligned drafts, diagnose posts before publishing, predict 24-hour performance, and run post-publish feedback loops to improve future predictions. Separate from the multi-account Social Amp workflow — operates entirely on one Threads handle at a time. |
 
 ---
 
@@ -43,7 +44,8 @@ social-amp/
 │       ├── Planner/
 │       ├── Calendar/
 │       ├── Pulse/
-│       └── Scraper/            # Scraper.jsx (platform tabs), ThreadsScraper.jsx, TwitterScraper.jsx
+│       ├── Scraper/            # Scraper.jsx (platform tabs), ThreadsScraper.jsx, TwitterScraper.jsx
+│       └── Booster/            # Booster.jsx shell + panels/{Setup,Voice,Topics,Draft,Analyze,Predict,Review}Panel.jsx
 ├── scraper/                    # Node.js scraper workspace (TypeScript)
 │   ├── src/
 │   │   ├── agent/
@@ -405,6 +407,93 @@ If the Account Tracker shows no posts after adding watched accounts, the `get_tw
 
 ---
 
+## Booster
+
+A single-account Threads content decision system at `/booster`. Operates independently from the multi-account Social Amp workflow — one Threads handle at a time, with its own Supabase table (`booster_trackers`).
+
+The system improves with use: each panel feeds the next, and post-publish feedback writes learning back into the tracker so predictions get more accurate over time.
+
+### Panel overview
+
+| Panel | Purpose |
+|-------|---------|
+| **Setup** | Import historical post data via 5 paths: Threads API (token + cursor pagination), JSON file upload, paste (JSON or plain text with Gemini fallback), Playwright profile scraper, or legacy migration. Generates a **Style Guide** (quantitative writing patterns) and **Concept Library** (concepts explained, analogies used, gaps to fill). |
+| **Voice** | Deep qualitative analysis of post history across 14 dimensions — sentence rhythm, tone switching, emotional expression, humor style, argumentation, signature phrases, and more. Produces an editable `brand_voice.md`. Re-runs preserve the `## Manual Refinements` section the user hand-edits. Brand Voice is the primary composition driver in Draft; all other panels treat it as observation-only. |
+| **Topics** | Mines comment demand (recurring questions, validated demand from author replies), historical performance by topic and content type, and internal freshness (semantic repetition risk). Recommends 3–5 topics with source badge, freshness label, self-repetition risk, suggested angles, and "Send to Draft →" handoff. Persists last result per handle. |
+| **Draft** | Generates a voice-aligned draft from a topic. Passes Brand Voice (up to 2500 chars), Style Guide, and Concept Library as composition context. Optional toggles (persisted per handle): freshness gate (internal repetition check), angle alternatives (2–3 options with "Use this" buttons), improvement questions (3–5 specific questions tied to draft lines). Draft → Analyze and Draft → Predict one-click handoffs. |
+| **Analyze** | Always-accessible pre-publish diagnostic — no tracker required. Runs three rounds: (1) algorithm red-line scan (R1–R11), (2) suppression risk scan, (3) signal assessment. Also covers psychology analysis (hook mechanism, hook/payoff gap, share motivation split, retellability, comment depth) and AI-tone detection across sentence, structure, and content layers. Pointed changes section gives exact location → issue → suggested fix → priority for each finding. Accepts text from Draft → Analyze handoff. Result saved to `config.last_analyze` with timestamp; reloads on panel return. |
+| **Predict** | Estimates 24-hour performance range (保守 / 基準 / 樂觀) for likes, replies, and reposts. Finds 3–5 nearest-neighbor posts by content type, hook type, word count band, and topic. Shows comparable post cards with match dimensions and actual metrics. Includes trend direction badge and upside/uncertainty factors. Accepts text from Draft → Predict handoff. Persists last prediction per handle with visible "predicted N minutes ago" timestamp. |
+| **Review** | Post-publish feedback loop. Select a tracker post (searchable list with "有預測" / "已復盤" badges), enter actual metrics + checkpoint (24h / 72h / 7日). If a prediction snapshot exists, shows a prediction vs actual table with deviation % and band-hit classification. Generates deviation reasons, signal validation, learning points, calibration notes, and follow-up questions. Saves `review_state` back to the tracker post in Supabase. |
+
+### Data flow
+
+```
+Setup → Style Guide + Concept Library
+     ↓
+Voice → brand_voice.md (editable)
+     ↓
+Topics → topic recommendations → Draft (pendingTopic)
+     ↓
+Draft → draft text → Analyze (pendingText) or Predict (pendingText)
+     ↓
+Predict → prediction_snapshot stored on tracker post
+     ↓
+Review → review_state written back to tracker post
+```
+
+### Supabase — booster_trackers table
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `handle` | TEXT UNIQUE | @username |
+| `tracker` | JSONB | Full tracker: `{ account, posts[], last_updated }` — posts carry metrics, snapshots, prediction_snapshot, review_state |
+| `style_guide` | TEXT | Markdown — generated by Setup |
+| `concept_library` | TEXT | Markdown — generated by Setup |
+| `brand_voice` | TEXT | Markdown — generated by Voice; Manual Refinements section preserved on re-run |
+| `config` | JSONB | Per-handle settings: `draft_settings`, `last_topics`, `last_draft`, `last_prediction`, `last_analyze` |
+
+### Post schema (`tracker.posts[]`)
+
+Each post follows the v1 tracker schema:
+
+```json
+{
+  "id": "post_id",
+  "text": "...",
+  "created_at": "ISO",
+  "metrics": { "likes": 0, "replies": 0, "reposts": 0, "views": 0 },
+  "word_count": 0,
+  "is_reply_post": false,
+  "snapshots": [{ "captured_at": "ISO", "likes": 0, "replies": 0 }],
+  "prediction_snapshot": { "predicted_at": "ISO", "confidence_level": "Usable", "ranges": { "likes": { "conservative": 0, "baseline": 0, "optimistic": 0 } }, "upside_drivers": [], "uncertainty_factors": [] },
+  "review_state": { "last_reviewed_at": "ISO", "actual_checkpoint_hours": 24, "actual_metrics": {}, "deviation_summary": "...", "calibration_notes": "...", "validated_signals": {}, "learning_points": [] }
+}
+```
+
+### Data confidence levels
+
+Used across Topics, Analyze, and Predict to honestly label how strong the evidence is:
+
+| Level | Posts with metrics | What you can claim |
+|-------|-------------------|--------------------|
+| Directional | < 5 | Sample too small for stable conclusions |
+| Weak | 5–9 | Tendency visible, not yet evidence |
+| Usable | 10–19 | Stable enough to guide decisions |
+| Strong | 20–49 | Reliable working baseline |
+| Deep | 50+ | Cross-dimensional analysis meaningful |
+
+### Import paths (Setup panel)
+
+| Path | When to use |
+|------|------------|
+| **A — Threads API** | You have a Threads API token. Cursor-paginated, most complete. Requires local scraper server running. |
+| **B — File upload** | You have a JSON export (Threads API format, Meta data export, tracker v1, or raw array). |
+| **C — Paste** | Paste JSON directly or plain text — Gemini extracts posts from unstructured text as fallback. |
+| **D — Profile scrape** | No API token. Playwright scrapes your Threads profile via the local browser session. Two independent initiators: **Posts** (scrapes `/@handle`) and **Replies** (scrapes `/@handle/replies`), each with its own target count selector (20 / 50 / 100 / 150 / 200). Either can be run independently; both stop early after two consecutive dry scrolls. Post links are matched against `/@owner/post/` to prevent parent-post text leaking into reply records. Requires local scraper server. |
+| **E — Migrate** | Import from a legacy tracker JSON — auto-detected and normalized by the same format detector as Path C. |
+
+---
+
 ## AI generation model
 
 Every draft is shaped by layered instructions in this order (bottom = highest model attention):
@@ -549,7 +638,7 @@ Supabase RPC functions: `get_twitter_posts`, `get_twitter_velocity_leaderboard`,
 
 ## Current status
 
-**Working as of 2026-04-23.**
+**Working as of 2026-04-25.**
 
 - Scraper login, post extraction, engagement counts, Supabase persistence — functional
 - Scraper control from browser UI (Start/Stop/Logs via SSE) — functional
@@ -577,13 +666,17 @@ Supabase RPC functions: `get_twitter_posts`, `get_twitter_velocity_leaderboard`,
 - Login flow redesigned — automated DOM detection removed (fragile against Threads markup changes); installer opens browser then waits for user to visually confirm login and press Enter; startup login gate removed from scraper so a stale session shows as 0 posts rather than a hard exit
 - Installer (`install-mac.command`): desktop launcher now written with `printf` instead of a heredoc — fixes silent failure on Mac when the file has Windows CRLF line endings; "Press Enter to open the browser" prompt removed before `npm run login` to prevent the stale keypress from auto-confirming the login step; `process.stdin.destroy()` called after confirmation so Node exits cleanly and the installer continues
 - Installer login steps are now Y/N-gated — Threads `(Y/n)` default yes, Twitter / X `(y/N)` default no; either can be skipped and completed by re-running the installer; already-done steps skip automatically on re-run
-- Distribution zip: `install-mac.command`, `install-windows.bat`, `install-windows.ps1`, and `scraper/` subfolder containing `package.json`, `tsconfig.json`, `src/` — do not include `node_modules/`, `.env`, or browser profile directories
+- Distribution zip: `install-mac.command`, `install-windows.bat`, `install-windows.ps1`, and `scraper/` subfolder containing `package.json`, `tsconfig.json`, and `src/` (all agent, cli, storage, analyzer files) — do not include `node_modules/`, `.env`, browser profile directories, or debug-only scripts (`test-scrape.ts`, `test-scroll.ts`, `dump-raw.ts`, `migrate.ts`)
 - **Twitter scraper** — home feed, keyword search, account tracker, Feed + Leaderboard + Account Tracker tabs — functional
 - Twitter feed: view counts, retweet/quote counts, reply badge, verified badge, **Reply on X →** — functional
 - Twitter leaderboard: view-weighted viral score, velocity arrows (↑/↑↑/↑↑↑), cross-scraper boost — functional
 - Twitter Account Tracker: watched accounts panel (shared in Supabase), time window filter (< 5m/10m/20m/All), reply-score sort, pulsing tab dot — functional
 - Account Tracker matches posts by `author_username` (any source) — requires `supabase/migrations/006_account_tracker_fix.sql`
-- Twitter keyword search URL: `x.com/search?q=keyword&src=typed_query` — home-first navigation to avoid SPA redirect to /home
+- Twitter keyword search URL: `x.com/search?q=typed_query&src=typed_query` — home-first navigation to avoid SPA redirect to /home
+- **Booster module** (Phases 1–9) — all panels functional; Setup, Voice, Topics, Draft, Analyze, Predict, Review
+- Booster Setup Path D (profile scrape) — two independent initiators: Posts tab and Replies tab, each with own target count selector (20–200) and Stop button; both use dry-scroll early exit; post links matched against `/@owner/post/` to prevent parent-post text leaking into reply records
+- Booster profile scraper — `postsTarget` / `repliesTarget` env vars replace old `SCROLL_COUNT`; 0 skips a tab; hard cap of 50 scrolls per tab
+- Booster panel results — all panels (Topics, Draft, Analyze, Predict, Review) save last result to Supabase and restore on panel return; generated-at timestamp displayed next to each generate button; Analyze previously had no save — now writes to `config.last_analyze`
 
 **Known issues:**
 - Safari blocks HTTP fetch from HTTPS pages — scraper control bar not reachable from Safari; use Chrome. Long-term fix: Supabase-based control (no local server required) or HTTPS local server with trusted cert via mkcert
@@ -599,7 +692,6 @@ Supabase RPC functions: `get_twitter_posts`, `get_twitter_velocity_leaderboard`,
 ## What's next
 
 - **Safari support for scraper control** — replace local HTTP server with Supabase-based command/status table so control works from any browser without mixed-content restrictions
-- **Topbar title** — add `'/scraper': 'Scraper'` to the `pageTitles` map in `src/components/Topbar.jsx`
 - **Twitter scraper — Phase 4: Trending tab** — scrape X Explore trending topics, store as timestamped snapshots, surface in a Trending tab with `Search →` and `Post as →` actions
 - **Per-author block** — block all posts from a given handle team-wide via a `threads_blocked_authors` table; blocked authors filterable via Filters ▾ popover
 

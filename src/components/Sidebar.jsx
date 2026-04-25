@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LogoIcon, ProductsIcon, AccountsIcon, CalendarIcon, PulseIcon, PlaybookIcon, PlusIcon, ScraperIcon } from './Icons'
+import { LogoIcon, ProductsIcon, AccountsIcon, CalendarIcon, PulseIcon, PlaybookIcon, PlusIcon, ScraperIcon, BoosterIcon } from './Icons'
 import { useApp } from '../context/AppContext'
 import './Sidebar.css'
 
@@ -10,6 +10,7 @@ const navItems = [
   { label: 'Calendar', path: '/calendar', Icon: CalendarIcon },
   { label: 'Pulse', path: '/pulse', Icon: PulseIcon },
   { label: 'Scraper', path: '/scraper', Icon: ScraperIcon },
+  { label: 'Booster', path: '/booster', Icon: BoosterIcon },
 ]
 
 export function Sidebar() {
